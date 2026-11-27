@@ -57,10 +57,19 @@ func TestGenerateShapes(t *testing.T) {
 	assert.NotContains(t, s, "import")
 	assert.Contains(t, s, "func readRec(r *Reader) Rec {")
 	assert.Contains(t, s, `out.A = r.I32("Rec.A")`)
-	assert.Contains(t, s, "if cooked && !ver >= 7 {")
+	assert.Contains(t, s, "if cooked && !(ver >= 7) {")
 	assert.Contains(t, s, `out.B = int64(r.I32("Rec.B32"))`)
 	assert.Contains(t, s, "if !cooked && ver >= 9 {")
 	assert.Contains(t, s, `_ = r.I64("Rec.Pad")`)
+}
+
+func TestGenerateBareLabels(t *testing.T) {
+	spec, err := Parse(wrap(`<struct name="Rec" func="readRec" label=""><field name="A" type="i32"/><call go="fix({label}, &amp;{out})"/></struct>`))
+	require.NoError(t, err)
+	out, err := Generate(spec, "x.xml")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `out.A = r.I32("A")`)
+	assert.Contains(t, string(out), `fix("", &out)`)
 }
 
 func TestGenerateArrayShapes(t *testing.T) {

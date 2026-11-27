@@ -264,7 +264,8 @@ func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
 	if s.Name == "" || s.Func == "" {
 		return nil, fmt.Errorf("<struct> needs name and func")
 	}
-	if (s.Label == "") == (s.LabelExpr == "") {
+	// An empty label attribute is a choice: the labels take no prefix.
+	if n.HasAttr("label") == (s.LabelExpr != "") {
 		return nil, fmt.Errorf("<struct> %s needs exactly one of label and label-expr", s.Name)
 	}
 	if s.Params == "" {
@@ -408,7 +409,9 @@ func (spec *Spec) parseCond(n *apidsl.Node) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("<%s> %s: %w", n.Name(), c.attr, err)
 		}
-		if c.negate {
+		if c.negate && strings.Contains(test, " ") {
+			test = "!(" + test + ")"
+		} else if c.negate {
 			test = "!" + test
 		}
 		parts = append(parts, test)

@@ -27,6 +27,8 @@ func (spec *Spec) readExpr(s *Struct, it Item) string {
 	label := strconv.Quote(s.Label + "." + it.Label)
 	if s.LabelExpr != "" {
 		label = s.LabelExpr + "+" + strconv.Quote("."+it.Label)
+	} else if s.Label == "" {
+		label = strconv.Quote(it.Label)
 	}
 	expr := strings.ReplaceAll(spec.Types[it.Type].Read, "{label}", label)
 	if it.As != "" {
