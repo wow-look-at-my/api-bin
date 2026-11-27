@@ -23,16 +23,18 @@ type Array struct {
 	Nullable  bool   // Elem reads a pointer, and a nil one is dropped
 	Alloc     bool   // the slice is allocated even when the count is zero
 	Check     string // statement with {count} and {label} holes, "" for none
+	CountName string // whole label of the count, "" for the label plus ".count"
 }
 
 func (spec *Spec) parseArray(n *apidsl.Node) error {
-	if err := apidsl.CheckAttrs(n, "of", "func", "label", "label-expr", "params", "count", "elem", "nullable", "alloc", "check"); err != nil {
+	if err := apidsl.CheckAttrs(n, "of", "func", "label", "label-expr", "params", "count", "elem", "nullable", "alloc", "check", "count-label"); err != nil {
 		return err
 	}
 	a := &Array{
 		Of: n.Attr("of"), Func: n.Attr("func"), Params: n.Attr("params"),
 		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
 		CountType: n.Attr("count"), Elem: n.Attr("elem"), Check: n.Attr("check"),
+		CountName: n.Attr("count-label"),
 	}
 	if a.Of == "" || a.Func == "" {
 		return fmt.Errorf("<array> needs of and func")
@@ -87,6 +89,9 @@ func (spec *Spec) countExpr(a *Array) string {
 	label := strconv.Quote(a.Label + ".count")
 	if a.LabelExpr != "" {
 		label = a.LabelExpr + "+" + strconv.Quote(".count")
+	}
+	if a.CountName != "" {
+		label = strconv.Quote(a.CountName)
 	}
 	return strings.ReplaceAll(spec.Types[a.CountType].Read, "{label}", label)
 }
