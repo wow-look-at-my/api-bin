@@ -72,6 +72,24 @@ func TestGenerateBareLabels(t *testing.T) {
 	assert.Contains(t, string(out), `fix("", &out)`)
 }
 
+func TestGenerateBranchShapes(t *testing.T) {
+	spec, err := Parse(wrap(`<struct name="Rec" go="rec" func="readRec" label="Rec">
+	<switch type="i32" label="Kind" unknown="fail({value}, {label})">
+		<case value="-1"/>
+		<case value="2"><when type="i32" label="Has"><field name="A" type="i32"/></when></case>
+	</switch>
+</struct>`))
+	require.NoError(t, err)
+	out, err := Generate(spec, "x.xml")
+	require.NoError(t, err)
+	s := string(out)
+	assert.Contains(t, s, "func readRec(r *Reader) rec {")
+	assert.Contains(t, s, `switch tag := r.I32("Rec.Kind"); tag {`)
+	assert.Contains(t, s, "case -1:\n\tcase 2:")
+	assert.Contains(t, s, `if r.I32("Rec.Has") {`)
+	assert.Contains(t, s, `fail(tag, "Rec")`)
+}
+
 func TestGenerateArrayShapes(t *testing.T) {
 	spec, err := Parse(wrap(`<array of="int32" func="readInts" label="Ints" count="i32" elem="i32" alloc="true" check="clamp(&amp;{count}, {label})"/>`))
 	require.NoError(t, err)
@@ -124,6 +142,14 @@ func TestParseRejects(t *testing.T) {
 		"bit attr":        {wrap(`<struct name="R" func="f" label="R"><bits type="i32" label="B"><bit n="1" name="X" doc="d"/></bits></struct>`), `unknown attribute "doc"`},
 		"bits no label":   {wrap(`<struct name="R" func="f" label="R"><bits type="i32"><bit n="1" name="X"/></bits></struct>`), "<bits> needs a label"},
 		"duplicate type":  {wrap(`<type name="i32" read="x({label})"/>` + ok), "declared twice"},
+		"switch empty":    {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"/></struct>`), "<switch> has no <case>"},
+		"switch child":    {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><arm/></switch></struct>`), "unknown element <arm>"},
+		"case value":      {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="x"/></switch></struct>`), "<case> needs an integer value"},
+		"case twice":      {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1"/><case value="1"/></switch></struct>`), "declared twice"},
+		"case attr":       {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1" doc="d"/></switch></struct>`), `unknown attribute "doc"`},
+		"case body":       {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1"><field type="i32"/></case></switch></struct>`), "<field> needs a name"},
+		"when empty":      {wrap(`<struct name="R" func="f" label="R"><when type="i32" label="H"/></struct>`), "<when> is empty"},
+		"null-if in case": {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1"><null-if type="i32" label="N"/></case></switch></struct>`), `<null-if> needs pointer="true"`},
 		"type no hole":    {wrap(`<type name="u8" read="x()"/>` + ok), "{label} hole"},
 		"version no hole": {wrap(`<version stream="w" test="x"/>` + ok), "{name} hole"},
 		"second go":       {wrap(`<go package="q" params="r"/>` + ok), "more than one <go>"},

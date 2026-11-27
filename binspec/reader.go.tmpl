@@ -25,11 +25,11 @@ func {{ .Func }}(v {{ .GoType }}) string {
 {{ end }}
 {{- range .Spec.Structs }}
 // {{ .Func }} reads one {{ .Name }}.
-func {{ .Func }}({{ .Params }}) {{ if .Pointer }}*{{ end }}{{ $.Spec.Go.Model }}{{ .Name }} {
+func {{ .Func }}({{ .Params }}) {{ if .Pointer }}*{{ end }}{{ .GoType }} {
 {{- if or .Pointer .Init }}
-	out := {{ if .Pointer }}&{{ end }}{{ $.Spec.Go.Model }}{{ .Name }}{ {{- .Init -}} }
+	out := {{ if .Pointer }}&{{ end }}{{ .GoType }}{ {{- .Init -}} }
 {{- else }}
-	var out {{ $.Spec.Go.Model }}{{ .Name }}
+	var out {{ .GoType }}
 {{- end }}
 {{ template "items" (scope . .Items) }}	return out
 }
@@ -63,6 +63,13 @@ func {{ .Func }}({{ .Params }}) []{{ $.Spec.Go.Model }}{{ .Of }} {
 {{ else if eq .Kind "null-if" }}if {{ read $s . }} {
 	return nil
 }
+{{ else if eq .Kind "when" }}if {{ read $s . }} {
+{{ template "items" (scope $s .Items) }}}
+{{ else if eq .Kind "switch" }}switch tag := {{ read $s . }}; tag {
+{{ range .Cases }}case {{ .Value }}:
+{{ template "items" (scope $s .Items) }}{{ end }}{{ if .Unknown }}default:
+	{{ unknown $s . }}
+{{ end }}}
 {{ else if eq .Kind "bits" }}{
 	bits := {{ read $s . }}
 {{- range .Bits }}

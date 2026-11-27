@@ -57,6 +57,7 @@ func Generate(spec *Spec, source string) ([]byte, error) {
 		"count": spec.countExpr,
 		"elem":  spec.elemExpr,
 		"check": checkStmt,
+		"unknown": unknownStmt,
 	}).Parse(readerTemplateText)
 	if err != nil {
 		return nil, err

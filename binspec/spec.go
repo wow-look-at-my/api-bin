@@ -3,6 +3,7 @@
 package binspec
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ type Struct struct {
 	Params    string // "" means the <go> params
 	Pointer   bool   // the reader returns a pointer, and may return nil
 	Init      string // field list of the value's composite literal
+	GoType    string // Go type of the value: the go attribute, or model plus name
 	Items     []Item
 }
 
@@ -73,6 +75,8 @@ const (
 	KindCall   = "call"
 	KindNullIf = "null-if"
 	KindBits   = "bits"
+	KindWhen   = "when"
+	KindSwitch = "switch"
 )
 
 // Item is one step of a layout: a stored field or a discarded read.
@@ -86,6 +90,8 @@ type Item struct {
 	Cond  string // Go expression, "" when the item always applies
 	Items []Item
 	Bits  []Bit
+	Cases   []Case
+	Unknown string // statement of a switch for a tag no case names
 }
 
 // Bit is one flag of a <bits> step: bit N of the value sets member Name.
@@ -250,10 +256,11 @@ func parseBinding(n *apidsl.Node, keyAttr string, into map[string]string) error 
 }
 
 func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
-	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params", "pointer", "init"); err != nil {
+	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params", "pointer", "init", "go"); err != nil {
 		return nil, err
 	}
 	s := &Struct{
+		GoType: cmp.Or(n.Attr("go"), spec.Go.Model+n.Attr("name")),
 		Name: n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
 		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
 		Pointer: n.Attr("pointer") == "true", Init: n.Attr("init"),
@@ -290,6 +297,11 @@ func hasKind(items []Item, kind string) bool {
 	for _, it := range items {
 		if it.Kind == kind || hasKind(it.Items, kind) {
 			return true
+		}
+		for _, c := range it.Cases {
+			if hasKind(c.Items, kind) {
+				return true
+			}
 		}
 	}
 	return false
@@ -338,8 +350,10 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	switch it.Kind {
 	case KindField:
 		allowed = []string{"name", "type", "as", "label"}
-	case KindSkip, KindNullIf, KindBits:
+	case KindSkip, KindNullIf, KindBits, KindWhen:
 		allowed = []string{"type", "label"}
+	case KindSwitch:
+		allowed = []string{"type", "label", "unknown"}
 	case KindGroup:
 	case KindCall:
 		allowed = []string{"go"}
@@ -381,11 +395,16 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	if it.Label == "" {
 		return it, fmt.Errorf("%s: <%s> needs a label", owner, it.Kind)
 	}
-	if it.Kind == KindBits {
+	switch it.Kind {
+	case KindBits:
 		it.Bits, err = parseBits(n, owner)
-		return it, err
+	case KindWhen:
+		it.Items, err = spec.parseItems(n, owner)
+	case KindSwitch:
+		it.Unknown = n.Attr("unknown")
+		it.Cases, err = spec.parseCases(n, owner)
 	}
-	return it, nil
+	return it, err
 }
 
 // parseCond joins the condition attributes of n into one Go expression.
