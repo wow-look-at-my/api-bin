@@ -1,5 +1,7 @@
 package binspec
 
+import _ "embed"
+
 import (
 	"os"
 	"path/filepath"
@@ -46,14 +48,7 @@ func TestGoldenCorpus(t *testing.T) {
 }
 
 func TestGenerateShapes(t *testing.T) {
-	spec, err := Parse(wrap(`
-<struct name="Rec" func="readRec" label="Rec">
-	<field name="A" type="i32"/>
-	<field name="B" type="i32" as="i64" label="B32" until="v:7" if="cooked"/>
-	<group since="v:9" unless="cooked">
-		<skip type="i64" label="Pad"/>
-	</group>
-</struct>`))
+	spec, err := Parse(wrap(testGenerateShapesXml))
 	require.NoError(t, err)
 	out, err := Generate(spec, "x.xml")
 	require.NoError(t, err)
@@ -112,11 +107,15 @@ func TestParseRejects(t *testing.T) {
 }
 
 func TestGenerateRejectsUnparsableOutput(t *testing.T) {
-	spec, err := Parse([]byte(`<api-bin><go package="p" params="r *Reader"/>
-<type name="i32" read="r.I32({label}"/>
-<struct name="R" func="f" label="R"><field name="A" type="i32"/></struct></api-bin>`))
+	spec, err := Parse([]byte(testGenerateRejectsUnparsableOutputXml))
 	require.NoError(t, err)
 	_, err = Generate(spec, "x.xml")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not parse")
 }
+
+//go:embed testdata/test-generate-shapes.xml
+var testGenerateShapesXml string
+
+//go:embed testdata/test-generate-rejects-unparsable-output.xml
+var testGenerateRejectsUnparsableOutputXml string

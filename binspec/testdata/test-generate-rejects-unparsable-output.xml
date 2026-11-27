@@ -1,0 +1,3 @@
+<api-bin><go package="p" params="r *Reader"/>
+<type name="i32" read="r.I32({label}"/>
+<struct name="R" func="f" label="R"><field name="A" type="i32"/></struct></api-bin>
