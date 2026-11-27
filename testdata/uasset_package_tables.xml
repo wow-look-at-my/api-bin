@@ -1,0 +1,74 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main" params="r *Reader, summary *uasset.PackageSummary, names []string" model="uasset.">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="i32" read="r.ReadInt32({label})"/>
+	<type name="u32" read="r.ReadUint32({label})"/>
+	<type name="i64" go="int64" read="r.ReadInt64({label})"/>
+	<type name="bool32" read="r.ReadBool32({label})"/>
+	<type name="guid" read="r.ReadGuid({label})"/>
+	<type name="fname" read="r.ReadFName(names, {label})"/>
+	<type name="u16" read="r.ReadUint16({label})"/>
+	<type name="fstring" read="r.ReadFString({label})"/>
+
+	<version stream="ue4" test="summary.UE4Ver(uasset.VER_UE4_{name})"/>
+	<version stream="ue5" test="summary.UE5Ver(uasset.UE5_{name})"/>
+	<flag name="filter-editor-only" test="summary.FilterEditorOnly()"/>
+	<flag name="unversioned" test="summary.IsUnversioned"/>
+
+	<struct name="FObjectImport" func="readImportEntry" label="ImportEntry">
+		<field name="ClassPackage" type="fname"/>
+		<field name="ClassName" type="fname"/>
+		<field name="OuterIndex" type="i32"/>
+		<field name="ObjectName" type="fname"/>
+		<field name="PackageName" type="fname" unless="filter-editor-only" since="ue4:NON_OUTER_PACKAGE_IMPORT"/>
+		<field name="ImportOptional" type="bool32" label="bImportOptional" since="ue5:OPTIONAL_RESOURCES"/>
+	</struct>
+
+	<struct name="FObjectExport" func="readExportEntry" label="ExportEntry">
+		<field name="ClassIndex" type="i32"/>
+		<field name="SuperIndex" type="i32"/>
+		<field name="TemplateIndex" type="i32" since="ue4:TemplateIndex_IN_COOKED_EXPORTS"/>
+		<field name="OuterIndex" type="i32"/>
+		<field name="ObjectName" type="fname"/>
+		<field name="ObjectFlags" type="u32"/>
+		<group since="ue4:64BIT_EXPORTMAP_SERIALSIZES">
+			<field name="SerialSize" type="i64"/>
+			<field name="SerialOffset" type="i64"/>
+		</group>
+		<group until="ue4:64BIT_EXPORTMAP_SERIALSIZES">
+			<field name="SerialSize" type="i32" as="i64" label="SerialSize32"/>
+			<field name="SerialOffset" type="i32" as="i64" label="SerialOffset32"/>
+		</group>
+		<field name="ForcedExport" type="bool32" label="bForcedExport"/>
+		<field name="NotForClient" type="bool32" label="bNotForClient"/>
+		<field name="NotForServer" type="bool32" label="bNotForServer"/>
+		<skip type="guid" label="PackageGuid" until="ue5:REMOVE_OBJECT_EXPORT_PACKAGE_GUID"/>
+		<field name="IsInheritedInstance" type="bool32" label="bIsInheritedInstance" since="ue5:TRACK_OBJECT_EXPORT_IS_INHERITED"/>
+		<field name="PackageFlags" type="u32"/>
+		<field name="NotAlwaysLoadedForEditorGame" type="bool32" label="bNotAlwaysLoadedForEditorGame" since="ue4:LOAD_FOR_EDITOR_GAME"/>
+		<field name="IsAsset" type="bool32" label="bIsAsset" since="ue4:COOKED_ASSETS_IN_EDITOR_SUPPORT"/>
+		<field name="GeneratePublicHash" type="bool32" label="bGeneratePublicHash" since="ue5:OPTIONAL_RESOURCES"/>
+		<group since="ue4:PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS">
+			<field name="FirstExportDependency" type="i32"/>
+			<field name="SerializationBeforeSerializationDeps" type="i32"/>
+			<field name="CreateBeforeSerializationDeps" type="i32"/>
+			<field name="SerializationBeforeCreateDeps" type="i32"/>
+			<field name="CreateBeforeCreateDeps" type="i32"/>
+		</group>
+		<group unless="unversioned" since="ue5:SCRIPT_SERIALIZATION_OFFSET">
+			<field name="ScriptSerializationStartOffset" type="i64"/>
+			<field name="ScriptSerializationEndOffset" type="i64"/>
+		</group>
+	</struct>
+
+	<struct name="EngineVersion" func="readEngineVersion" label-expr="prefix" params="r *Reader, prefix string">
+		<field name="Major" type="u16"/>
+		<field name="Minor" type="u16"/>
+		<field name="Patch" type="u16"/>
+		<field name="Changelist" type="u32"/>
+		<field name="Branch" type="fstring"/>
+	</struct>
+</api-bin>

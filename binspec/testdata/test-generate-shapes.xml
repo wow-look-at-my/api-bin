@@ -1,0 +1,8 @@
+
+<struct name="Rec" func="readRec" label="Rec">
+	<field name="A" type="i32"/>
+	<field name="B" type="i32" as="i64" label="B32" until="v:7" if="cooked"/>
+	<group since="v:9" unless="cooked">
+		<skip type="i64" label="Pad"/>
+	</group>
+</struct>

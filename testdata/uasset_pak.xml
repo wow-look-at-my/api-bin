@@ -1,0 +1,41 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<!-- The pak reader keeps no trace, so its types take no label. -->
+	<go package="main" params="r *pakReader"/>
+
+	<type name="u8" read="r.u8()"/>
+	<type name="i32" read="r.i32()"/>
+	<type name="u32" read="r.u32()"/>
+	<type name="i64" read="r.i64()"/>
+	<type name="bytes20" read="r.bytes(20)"/>
+	<type name="block" read="readPakCompressedBlock(r)"/>
+	<type name="blocks" read="readPakCompressedBlocks(r)"/>
+
+	<flag name="compressed" test="out.CompressionMethodIndex != 0"/>
+
+	<!-- One compression block: byte offsets relative to the entry. -->
+	<struct name="PakCompressedBlock" func="readPakCompressedBlock" label="">
+		<field name="Start" type="i64"/>
+		<field name="End" type="i64"/>
+	</struct>
+
+	<array of="PakCompressedBlock" func="readPakCompressedBlocks" label="CompressionBlocks"
+		count="i32" elem="block" alloc="true" check="if !pakBlockCountOK(r, {count}) { return nil }"/>
+
+	<!--
+		A fully serialized FPakEntry, as it stands in the data region and in
+		the unencoded entries of the index. Hash is the payload SHA1.
+	-->
+	<struct name="PakEntry" func="readPakEntryRecord" label="" fill="true" params="r *pakReader, out *PakEntry">
+		<field name="Offset" type="i64"/>
+		<field name="Size" type="i64"/>
+		<field name="UncompressedSize" type="i64"/>
+		<field name="CompressionMethodIndex" type="u32"/>
+		<skip type="bytes20" label="Hash"/>
+		<field name="CompressionBlocks" type="blocks" if="compressed"/>
+		<bits type="u8" label="Flags">
+			<bit n="0" name="Encrypted"/>
+		</bits>
+		<field name="CompressionBlockSize" type="u32"/>
+	</struct>
+</api-bin>

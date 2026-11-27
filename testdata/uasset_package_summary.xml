@@ -1,0 +1,137 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main" params="r *Reader" model="uasset.">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="i32" read="r.ReadInt32({label})"/>
+	<type name="u32" read="r.ReadUint32({label})"/>
+	<type name="i64" read="r.ReadInt64({label})"/>
+	<type name="guid" read="r.ReadGuid({label})"/>
+	<type name="fstring" read="r.ReadFString({label})"/>
+	<type name="hash20" read="readHash20(r, {label})"/>
+	<type name="engver" read="readEngineVersion(r, {label})"/>
+	<type name="customversion" read="readCustomVersion(r, {label})"/>
+	<type name="guid-customversion" read="readGuidCustomVersion(r, {label})"/>
+
+	<!-- The version tests read the summary under construction. -->
+	<version stream="ue4" test="out.UE4Ver(uasset.VER_UE4_{name})"/>
+	<version stream="ue5" test="out.UE5Ver(uasset.UE5_{name})"/>
+	<flag name="filter-editor-only" test="out.FilterEditorOnly()"/>
+	<flag name="ue3-version" test="out.LegacyFileVersion != uasset.LegacyVersionNoUE3"/>
+	<flag name="ue5-version" test="out.LegacyFileVersion &lt;= uasset.LegacyVersionHasUE5Version"/>
+	<flag name="custom-versions" test="out.LegacyFileVersion &lt;= uasset.LegacyVersionCustomEnums"/>
+	<flag name="texture-allocations" test="out.LegacyFileVersion &gt; uasset.LegacyVersionNoTextureAlloc"/>
+
+	<!-- FCustomVersion: a GUID key and a version. -->
+	<struct name="CustomVersion" func="readCustomVersion" label-expr="label" params="r *Reader, label string">
+		<field name="Key" type="guid"/>
+		<field name="Version" type="i32"/>
+	</struct>
+
+	<!-- FGuidCustomVersion_DEPRECATED: the same, then a friendly name. -->
+	<struct name="CustomVersion" func="readGuidCustomVersion" label-expr="label" params="r *Reader, label string">
+		<field name="Key" type="guid"/>
+		<field name="Version" type="i32"/>
+		<skip type="fstring" label="FriendlyName"/>
+	</struct>
+
+	<array of="CustomVersion" func="readCustomVersionArray" label="CustomVersion" count="i32" count-label="CustomVersionCount"
+		elem="customversion" alloc="true" check="if !customVersionCountOK(r, {count}, &quot;custom&quot;) { return nil }"/>
+	<array of="CustomVersion" func="readGuidCustomVersionArray" label="CustomVersion" count="i32" count-label="CustomVersionCount"
+		elem="guid-customversion" alloc="true" check="if !customVersionCountOK(r, {count}, &quot;guid custom&quot;) { return nil }"/>
+
+	<!-- FPackageFileSummary, in the serialization order of PackageFileSummary.cpp. -->
+	<struct name="PackageSummary" func="parseHeader" label="">
+		<field name="Tag" type="u32"/>
+		<call go="if !summaryTagOK(r, &amp;{out}) { return {out} }"/>
+		<field name="LegacyFileVersion" type="i32"/>
+		<call go="if !summaryLegacyVersionOK(r, &amp;{out}) { return {out} }"/>
+		<field name="LegacyUE3Version" type="i32" if="ue3-version"/>
+		<field name="FileVersionUE4" type="i32"/>
+		<field name="FileVersionUE5" type="i32" if="ue5-version"/>
+		<field name="FileVersionLicenseeUE" type="i32"/>
+		<call go="assumeUnversionedSummary(r, &amp;{out})"/>
+
+		<!-- SavedHash and TotalHeaderSize come before the custom versions from PACKAGE_SAVED_HASH on. -->
+		<group since="ue5:PACKAGE_SAVED_HASH">
+			<field name="SavedHash" type="hash20"/>
+			<field name="TotalHeaderSize" type="i32"/>
+		</group>
+		<call go="{out}.CustomVersions = parseCustomVersions(r, {out}.LegacyFileVersion)" if="custom-versions"/>
+		<field name="TotalHeaderSize" type="i32" until="ue5:PACKAGE_SAVED_HASH"/>
+
+		<field name="PackageName" type="fstring"/>
+		<field name="PackageFlags" type="u32"/>
+		<field name="NameCount" type="i32"/>
+		<field name="NameOffset" type="i32"/>
+		<group since="ue5:ADD_SOFTOBJECTPATH_LIST">
+			<field name="SoftObjectPathsCount" type="i32"/>
+			<field name="SoftObjectPathsOffset" type="i32"/>
+		</group>
+		<field name="LocalizationId" type="fstring" unless="filter-editor-only" since="ue4:ADDED_PACKAGE_SUMMARY_LOCALIZATION_ID"/>
+		<group since="ue4:SERIALIZE_TEXT_IN_PACKAGES">
+			<field name="GatherableTextDataCount" type="i32"/>
+			<field name="GatherableTextDataOffset" type="i32"/>
+		</group>
+		<field name="ExportCount" type="i32"/>
+		<field name="ExportOffset" type="i32"/>
+		<field name="ImportCount" type="i32"/>
+		<field name="ImportOffset" type="i32"/>
+		<group since="ue5:VERSE_CELLS">
+			<field name="CellExportCount" type="i32"/>
+			<field name="CellExportOffset" type="i32"/>
+			<field name="CellImportCount" type="i32"/>
+			<field name="CellImportOffset" type="i32"/>
+		</group>
+		<field name="MetaDataOffset" type="i32" since="ue5:METADATA_SERIALIZATION_OFFSET"/>
+		<field name="DependsOffset" type="i32"/>
+		<call go="if summaryTooOld(r, &amp;{out}) { return {out} }"/>
+
+		<group since="ue4:ADD_STRING_ASSET_REFERENCES_MAP">
+			<field name="SoftPackageReferencesCount" type="i32"/>
+			<field name="SoftPackageReferencesOffset" type="i32"/>
+		</group>
+		<field name="SearchableNamesOffset" type="i32" since="ue4:ADDED_SEARCHABLE_NAMES"/>
+		<field name="ThumbnailTableOffset" type="i32"/>
+		<group since="ue5:IMPORT_TYPE_HIERARCHIES">
+			<field name="ImportTypeHierarchiesCount" type="i32"/>
+			<field name="ImportTypeHierarchiesOffset" type="i32"/>
+		</group>
+		<field name="Guid" type="guid" until="ue5:PACKAGE_SAVED_HASH"/>
+		<!-- OwnerPersistentGuid existed only between ADDED_PACKAGE_OWNER and NON_OUTER_PACKAGE_IMPORT. -->
+		<group unless="filter-editor-only" since="ue4:ADDED_PACKAGE_OWNER">
+			<field name="PersistentGuid" type="guid"/>
+			<field name="OwnerPersistentGuid" type="guid" until="ue4:NON_OUTER_PACKAGE_IMPORT"/>
+		</group>
+		<call go="{out}.Generations = readGenerations(r)"/>
+
+		<field name="SavedByEngineVersion" type="engver" since="ue4:ENGINE_VERSION_OBJECT"/>
+		<call go="readLegacyEngineChangelist(r, &amp;{out})" until="ue4:ENGINE_VERSION_OBJECT"/>
+		<field name="CompatibleWithEngineVersion" type="engver" since="ue4:PACKAGE_SUMMARY_HAS_COMPATIBLE_ENGINE_VERSION"/>
+		<call go="{out}.CompatibleWithEngineVersion = {out}.SavedByEngineVersion" until="ue4:PACKAGE_SUMMARY_HAS_COMPATIBLE_ENGINE_VERSION"/>
+
+		<field name="CompressionFlags" type="u32"/>
+		<call go="skipCompressedChunks(r)"/>
+		<field name="PackageSource" type="u32"/>
+		<call go="skipAdditionalPackagesToCook(r)"/>
+		<call go="checkTextureAllocations(r)" if="texture-allocations"/>
+		<field name="AssetRegistryDataOffset" type="i32"/>
+		<field name="BulkDataStartOffset" type="i64"/>
+		<field name="WorldTileInfoDataOffset" type="i32" since="ue4:WORLD_LEVEL_INFO"/>
+		<call go="{out}.ChunkIDs = readChunkIDs(r, &amp;{out})"/>
+
+		<!-- An absent count or offset reads as -1, or as the name count. -->
+		<group since="ue4:PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS">
+			<field name="PreloadDependencyCount" type="i32"/>
+			<field name="PreloadDependencyOffset" type="i32"/>
+		</group>
+		<call go="{out}.PreloadDependencyCount = -1" until="ue4:PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS"/>
+		<field name="NamesReferencedFromExportDataCount" type="i32" since="ue5:NAMES_REFERENCED_FROM_EXPORT_DATA"/>
+		<call go="{out}.NamesReferencedFromExportDataCount = {out}.NameCount" until="ue5:NAMES_REFERENCED_FROM_EXPORT_DATA"/>
+		<field name="PayloadTocOffset" type="i64" since="ue5:PAYLOAD_TOC"/>
+		<call go="{out}.PayloadTocOffset = -1" until="ue5:PAYLOAD_TOC"/>
+		<field name="DataResourceOffset" type="i32" since="ue5:DATA_RESOURCES"/>
+		<call go="{out}.DataResourceOffset = -1" until="ue5:DATA_RESOURCES"/>
+	</struct>
+</api-bin>

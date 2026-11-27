@@ -1,0 +1,149 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main" params="r *Reader, asset *uasset.UAsset, v pinVersions, label string" model="uasset.">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="bool32" read="r.ReadBool32({label})"/>
+	<type name="fstring" read="r.ReadFString({label})"/>
+	<type name="fname" read="r.ReadFName(asset.Names, {label})"/>
+	<type name="fguid" read="readFGuid(r, {label})"/>
+	<type name="pinname" read="readPinName(r, asset, v, {label})"/>
+	<type name="objref" read="objectRefName(asset, r.ReadInt32({label}))"/>
+	<type name="direction" read="pinDirectionName(r.ReadUint8({label}))"/>
+	<type name="pintype" read="readEdGraphPinType(r, asset, v, {label})"/>
+	<type name="i32" read="r.ReadInt32({label})"/>
+	<type name="u32" read="r.ReadUint32({label})"/>
+	<type name="i8" read="r.ReadInt8({label})"/>
+	<type name="pintext" read="readPinText(r, v, {label}).Source"/>
+	<type name="pinref" read="readPinRef(r, {label})"/>
+	<type name="pinrefs" read="readPinRefArray(r, {label})"/>
+
+	<flag name="culture-invariant-bool" test="v.hasCultureInvariantBool"/>
+	<flag name="filter-editor-only" test="v.filterEditorOnly"/>
+	<flag name="source-index" test="v.hasSourceIndex"/>
+	<flag name="pin-type" test="v.hasPinTypeAtAll"/>
+	<flag name="member-reference" test="v.hasMemberReference"/>
+	<flag name="pin-type-const" test="v.hasPinTypeConst"/>
+	<flag name="uobject-wrapper" test="v.hasUObjectWrapper"/>
+	<flag name="single-precision-float" test="v.hasSinglePrecisionFloat"/>
+
+	<!-- FEdGraphTerminalType operator<<, EdGraphNode.cpp:46-116: the value type of a Map pin. -->
+	<struct name="EdGraphTerminalType" func="readEdGraphTerminalType" label-expr="label">
+		<field name="Category" type="pinname" label="TerminalCategory"/>
+		<field name="SubCategory" type="pinname" label="TerminalSubCategory"/>
+		<field name="SubCategoryObject" type="objref" label="TerminalSubCategoryObject"/>
+		<field name="IsConst" type="bool32" label="bTerminalIsConst"/>
+		<field name="IsWeakPointer" type="bool32" label="bTerminalIsWeakPointer"/>
+		<field name="IsUObjectWrapper" type="bool32" label="bTerminalIsUObjectWrapper" if="uobject-wrapper"/>
+	</struct>
+
+	<!-- FEdGraphPinType::Serialize, EdGraphPin.cpp:161-344. Before EDGRAPHPINTYPE_SERIALIZATION the struct is absent. -->
+	<struct name="EdGraphPinType" func="readEdGraphPinType" label-expr="label">
+		<group if="pin-type">
+			<field name="Category" type="pinname" label="PinCategory"/>
+			<field name="SubCategory" type="pinname" label="PinSubCategory"/>
+			<field name="SubCategoryObject" type="objref" label="PinSubCategoryObject"/>
+			<call go="readPinContainer(r, asset, v, {label}, &amp;{out})"/>
+			<field name="IsReference" type="bool32" label="bIsReference"/>
+			<field name="IsWeakPointer" type="bool32" label="bIsWeakPointer"/>
+			<!-- FSimpleMemberReference, EdGraphPin.h:66-72. -->
+			<group if="member-reference">
+				<field name="MemberParent" type="objref" label="MemberReference.MemberParent"/>
+				<field name="MemberName" type="fname" label="MemberReference.MemberName"/>
+				<field name="MemberGuid" type="fguid" label="MemberReference.MemberGuid"/>
+			</group>
+			<field name="IsConst" type="bool32" label="bIsConst" if="pin-type-const"/>
+			<field name="IsUObjectWrapper" type="bool32" label="bIsUObjectWrapper" if="uobject-wrapper"/>
+			<field name="SerializeAsSinglePrecisionFloat" type="bool32" label="bSerializeAsSinglePrecisionFloat" if="single-precision-float"/>
+		</group>
+	</struct>
+
+	<!-- FGuid: little-endian uint32s A, B, C, D (Guid.cpp:584-587). -->
+	<struct name="FGuid" func="readFGuid" label-expr="label" params="r *Reader, label string">
+		<field name="A" type="u32"/>
+		<field name="B" type="u32"/>
+		<field name="C" type="u32"/>
+		<field name="D" type="u32"/>
+	</struct>
+
+	<!-- SerializePinArray of pin references. A null entry is dropped. -->
+	<array of="EdGraphPinRef" func="readPinRefArray" label-expr="label" params="r *Reader, label string"
+		count="i32" elem="pinref" nullable="true" check="checkPinRefCount(r, {count}, {label})"/>
+
+	<!-- One pin reference: [bNullPtr] or [bNullPtr=0][node][guid]. -->
+	<struct name="EdGraphPinRef" func="readPinRef" label-expr="label" params="r *Reader, label string" pointer="true">
+		<null-if type="bool32" label="bNullPtr"/>
+		<field name="NodeIndex" type="i32" label="OwningNode"/>
+		<field name="PinID" type="fguid" label="PinId"/>
+	</struct>
+
+	<!--
+		One element of the node-owned pin array: the [bNullPtr][OwningNode][PinId]
+		prelude, then UEdGraphPin::Serialize (EdGraphPin.cpp:1674-1796).
+	-->
+	<struct name="EdGraphPin" func="readOwnedPin" label-expr="label" pointer="true" init="SourceIndex: -1">
+		<null-if type="bool32" label="bNullPtr"/>
+		<skip type="i32" label="prelude.OwningNode"/>
+		<skip type="fguid" label="prelude.PinId"/>
+		<skip type="i32" label="OwningNode"/>
+		<field name="PinID" type="fguid" label="PinId"/>
+		<field name="Name" type="pinname" label="PinName"/>
+		<field name="FriendlyName" type="pintext" label="PinFriendlyName" unless="filter-editor-only"/>
+		<field name="SourceIndex" type="i32" if="source-index"/>
+		<field name="ToolTip" type="fstring" label="PinToolTip"/>
+		<field name="Direction" type="direction"/>
+		<field name="Type" type="pintype" label="PinType"/>
+		<field name="DefaultValue" type="fstring"/>
+		<field name="AutogeneratedDefaultValue" type="fstring"/>
+		<field name="DefaultObject" type="objref"/>
+		<field name="DefaultTextValue" type="pintext"/>
+		<field name="LinkedTo" type="pinrefs"/>
+		<field name="SubPins" type="pinrefs"/>
+		<field name="ParentPin" type="pinref"/>
+		<field name="ReferencePassThroughConnection" type="pinref"/>
+		<group unless="filter-editor-only">
+			<field name="PersistentGuid" type="fguid"/>
+			<bits type="u32" label="BitField">
+				<bit n="0" name="Hidden"/>
+				<bit n="1" name="NotConnectable"/>
+				<bit n="2" name="DefaultValueIsReadOnly"/>
+				<bit n="3" name="DefaultValueIsIgnored"/>
+				<bit n="4" name="AdvancedView"/>
+				<bit n="5" name="Orphaned"/>
+			</bits>
+		</group>
+	</struct>
+
+	<!--
+		FText as a pin field carries it (FText::SerializeText, Text.cpp:824-1040).
+		An editor-saved pin holds only the None (-1) and Base (0) histories. Any
+		other one fails the node through the per-export recovery. An FTextKey is
+		an FString on the wire.
+	-->
+	<struct name="pinText" go="pinText" func="readPinText" label-expr="label" params="r *Reader, v pinVersions, label string">
+		<skip type="u32" label="Flags"/>
+		<switch type="i8" label="HistoryType" unknown="panic(fmt.Sprintf(&quot;unsupported FText history type %d at 0x%X (%s)&quot;, {value}, r.Pos()-1, {label}))">
+			<case value="-1">
+				<group if="culture-invariant-bool">
+					<when type="bool32" label="bHasCultureInvariantString">
+						<field name="Source" type="fstring" label="CultureInvariantString"/>
+					</when>
+				</group>
+			</case>
+			<case value="0">
+				<skip type="fstring" label="Namespace"/>
+				<skip type="fstring" label="Key"/>
+				<field name="Source" type="fstring" label="SourceString"/>
+			</case>
+		</switch>
+	</struct>
+
+	<!-- One element of the trailing FUserPinInfo array. -->
+	<struct name="UserPinInfo" func="readUserPinInfo" label-expr="label">
+		<field name="Name" type="pinname" label="PinName"/>
+		<field name="Type" type="pintype" label="PinType"/>
+		<field name="DesiredDirection" type="direction" label="DesiredPinDirection"/>
+		<field name="DefaultValue" type="fstring" label="PinDefaultValue"/>
+	</struct>
+</api-bin>

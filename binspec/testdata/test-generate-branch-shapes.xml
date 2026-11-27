@@ -1,0 +1,6 @@
+<struct name="Rec" go="rec" func="readRec" label="Rec">
+	<switch type="i32" label="Kind" unknown="fail({value}, {label})">
+		<case value="-1"/>
+		<case value="2"><when type="i32" label="Has"><field name="A" type="i32"/></when></case>
+	</switch>
+</struct>
