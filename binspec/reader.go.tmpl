@@ -51,7 +51,7 @@ func {{ .Func }}({{ .Params }}) []{{ $.Spec.Go.Model }}{{ .Of }} {
 {{- else }}
 	var out []{{ $.Spec.Go.Model }}{{ .Of }}
 {{- end }}
-	for i := range count {
+	for {{ if indexed . }}i := {{ end }}range count {
 {{- if .Nullable }}
 		if e := {{ elem . }}; e != nil {
 			out = append(out, *e)

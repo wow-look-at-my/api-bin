@@ -96,6 +96,11 @@ func (spec *Spec) countExpr(a *Array) string {
 	return strings.ReplaceAll(spec.Types[a.CountType].Read, "{label}", label)
 }
 
+// indexed reports whether the element read takes a label, and so the index.
+func (spec *Spec) indexed(a *Array) bool {
+	return strings.Contains(spec.Types[a.Elem].Read, "{label}")
+}
+
 // elemExpr returns the Go expression that reads element i.
 func (spec *Spec) elemExpr(a *Array) string {
 	label := `fmt.Sprintf("%s[%d]", ` + a.LabelExpr + `, i)`

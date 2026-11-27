@@ -58,13 +58,15 @@ func Generate(spec *Spec, source string) ([]byte, error) {
 		"elem":    spec.elemExpr,
 		"check":   checkStmt,
 		"unknown": unknownStmt,
+		"indexed": spec.indexed,
 	}).Parse(readerTemplateText)
 	if err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
 	imports := spec.Go.Imports
-	if len(spec.Enums)+len(spec.Arrays) > 0 && !slices.Contains(imports, "fmt") {
+	needsFmt := len(spec.Enums) > 0 || slices.ContainsFunc(spec.Arrays, spec.indexed)
+	if needsFmt && !slices.Contains(imports, "fmt") {
 		imports = append([]string{"fmt"}, imports...)
 	}
 	data := struct {
