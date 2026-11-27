@@ -56,9 +56,9 @@ func TestGenerateShapes(t *testing.T) {
 	assert.Contains(t, s, "package p\n")
 	assert.NotContains(t, s, "import")
 	assert.Contains(t, s, "func readRec(r *Reader) Rec {")
-	assert.Contains(t, s, `v.A = r.I32("Rec.A")`)
+	assert.Contains(t, s, `out.A = r.I32("Rec.A")`)
 	assert.Contains(t, s, "if cooked && !ver >= 7 {")
-	assert.Contains(t, s, `v.B = int64(r.I32("Rec.B32"))`)
+	assert.Contains(t, s, `out.B = int64(r.I32("Rec.B32"))`)
 	assert.Contains(t, s, "if !cooked && ver >= 9 {")
 	assert.Contains(t, s, `_ = r.I64("Rec.Pad")`)
 }
@@ -82,14 +82,17 @@ func TestParseRejects(t *testing.T) {
 		"field no name":   {wrap(`<struct name="R" func="f" label="R"><field type="i32"/></struct>`), "<field> needs a name"},
 		"skip no label":   {wrap(`<struct name="R" func="f" label="R"><skip type="i32"/></struct>`), "<skip> needs a label"},
 		"empty group":     {wrap(`<struct name="R" func="f" label="R"><group/></struct>`), "<group> is empty"},
-		"struct attrs":    {wrap(`<struct name="R"><field name="A" type="i32"/></struct>`), "needs name, func and label"},
+		"struct attrs":    {wrap(`<struct name="R"><field name="A" type="i32"/></struct>`), "needs name and func"},
+		"no label":        {wrap(`<struct name="R" func="f"><field name="A" type="i32"/></struct>`), "exactly one of label and label-expr"},
+		"two labels":      {wrap(`<struct name="R" func="f" label="R" label-expr="l"><field name="A" type="i32"/></struct>`), "exactly one of label and label-expr"},
+		"call no go":      {wrap(`<struct name="R" func="f" label="R"><call/></struct>`), "<call> needs a go statement"},
 		"duplicate type":  {wrap(`<type name="i32" read="x({label})"/>` + ok), "declared twice"},
 		"type no hole":    {wrap(`<type name="u8" read="x()"/>` + ok), "{label} hole"},
 		"version no hole": {wrap(`<version stream="w" test="x"/>` + ok), "{name} hole"},
 		"second go":       {wrap(`<go package="q" params="r"/>` + ok), "more than one <go>"},
 		"import no path":  {[]byte(`<api-bin><go package="p" params="r"><import/></go>` + ok + `</api-bin>`), "<import> needs a path"},
 		"go child":        {[]byte(`<api-bin><go package="p" params="r"><x/></go>` + ok + `</api-bin>`), "unknown element <x>"},
-		"go no params":    {[]byte(`<api-bin><go package="p"/>` + ok + `</api-bin>`), "needs params when"},
+		"go no params":    {[]byte(`<api-bin><go package="p"/>` + ok + `</api-bin>`), "has no params"},
 		"go no package":   {[]byte(`<api-bin><go params="r"/>` + ok + `</api-bin>`), "<go> needs a package"},
 		"enum attrs":      {wrap(`<enum name="E" func="f" unknown="x%d"><value n="0" name="A"/></enum>`), "needs name, func and go"},
 		"enum unknown":    {wrap(`<enum name="E" func="f" go="uint8" unknown="x"><value n="0" name="A"/></enum>`), "exactly one %d"},

@@ -25,11 +25,24 @@ type itemScope struct {
 // readExpr returns the Go expression that reads one item off the wire.
 func (spec *Spec) readExpr(s *Struct, it Item) string {
 	label := strconv.Quote(s.Label + "." + it.Label)
+	if s.LabelExpr != "" {
+		label = s.LabelExpr + "+" + strconv.Quote("."+it.Label)
+	}
 	expr := strings.ReplaceAll(spec.Types[it.Type].Read, "{label}", label)
 	if it.As != "" {
 		return spec.Types[it.As].GoType + "(" + expr + ")"
 	}
 	return expr
+}
+
+// callStmt fills the holes of a <call>: {label} is the struct's label prefix
+// and {out} is the value under construction.
+func callStmt(s *Struct, it Item) string {
+	label := s.LabelExpr
+	if label == "" {
+		label = strconv.Quote(s.Label)
+	}
+	return strings.NewReplacer("{label}", label, "{out}", "out").Replace(it.Go)
 }
 
 // Generate returns the gofmt-ed Go source of the readers in spec. The source
@@ -38,6 +51,7 @@ func Generate(spec *Spec, source string) ([]byte, error) {
 	tmpl, err := template.New("reader").Funcs(template.FuncMap{
 		"scope": func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
 		"read":  spec.readExpr,
+		"stmt":  callStmt,
 	}).Parse(readerTemplateText)
 	if err != nil {
 		return nil, err

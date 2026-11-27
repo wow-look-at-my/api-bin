@@ -52,13 +52,14 @@ type WireType struct {
 	GoType string
 }
 
-// Struct is one layout. Func names the generated reader, and Label prefixes
-// each trace label.
+// Struct is one layout. Func names the generated reader.
 type Struct struct {
-	Name  string
-	Func  string
-	Label string
-	Items []Item
+	Name      string
+	Func      string
+	Label     string
+	LabelExpr string
+	Params    string // "" means the <go> params
+	Items     []Item
 }
 
 // Item kinds.
@@ -66,16 +67,17 @@ const (
 	KindField = "field"
 	KindSkip  = "skip"
 	KindGroup = "group"
+	KindCall  = "call"
 )
 
-// Item is one step of a layout: a stored field, a discarded read, or a group
-// of steps under one condition.
+// Item is one step of a layout: a stored field or a discarded read.
 type Item struct {
 	Kind  string
 	Name  string
 	Type  string
 	As    string
 	Label string
+	Go    string // statement of a call, with {label} and {out} holes
 	Cond  string // Go expression, "" when the item always applies
 	Items []Item
 }
@@ -120,9 +122,6 @@ func Parse(src []byte) (*Spec, error) {
 	}
 	if len(structs) == 0 && len(spec.Enums) == 0 {
 		return nil, fmt.Errorf("<api-bin> declares no <struct> and no <enum>")
-	}
-	if len(structs) > 0 && spec.Go.Params == "" {
-		return nil, fmt.Errorf("<go> needs params when the spec has a <struct>")
 	}
 	// Layouts parse last, so a binding may follow the struct that uses it.
 	for _, n := range structs {
@@ -232,12 +231,24 @@ func parseBinding(n *apidsl.Node, keyAttr string, into map[string]string) error 
 }
 
 func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
-	if err := apidsl.CheckAttrs(n, "name", "func", "label"); err != nil {
+	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params"); err != nil {
 		return nil, err
 	}
-	s := &Struct{Name: n.Attr("name"), Func: n.Attr("func"), Label: n.Attr("label")}
-	if s.Name == "" || s.Func == "" || s.Label == "" {
-		return nil, fmt.Errorf("<struct> needs name, func and label")
+	s := &Struct{
+		Name: n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
+		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
+	}
+	if s.Name == "" || s.Func == "" {
+		return nil, fmt.Errorf("<struct> needs name and func")
+	}
+	if (s.Label == "") == (s.LabelExpr == "") {
+		return nil, fmt.Errorf("<struct> %s needs exactly one of label and label-expr", s.Name)
+	}
+	if s.Params == "" {
+		s.Params = spec.Go.Params
+	}
+	if s.Params == "" {
+		return nil, fmt.Errorf("<struct> %s has no params, and <go> gives none", s.Name)
 	}
 	items, err := spec.parseItems(n, s.Name)
 	if err != nil {
@@ -271,6 +282,8 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	case KindSkip:
 		allowed = []string{"type", "label"}
 	case KindGroup:
+	case KindCall:
+		allowed = []string{"go"}
 	default:
 		return it, fmt.Errorf("%s: unknown element <%s>", owner, it.Kind)
 	}
@@ -285,6 +298,13 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	if it.Kind == KindGroup {
 		it.Items, err = spec.parseItems(n, owner)
 		return it, err
+	}
+	if it.Kind == KindCall {
+		it.Go = n.Attr("go")
+		if it.Go == "" {
+			return it, fmt.Errorf("%s: <call> needs a go statement", owner)
+		}
+		return it, nil
 	}
 	it.Name, it.Type, it.As, it.Label = n.Attr("name"), n.Attr("type"), n.Attr("as"), n.Attr("label")
 	if _, ok := spec.Types[it.Type]; !ok {

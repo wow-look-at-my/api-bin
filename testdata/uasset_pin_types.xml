@@ -1,0 +1,60 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main" params="r *Reader, asset *uasset.UAsset, v pinVersions, label string" model="uasset.">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="bool32" read="r.ReadBool32({label})"/>
+	<type name="fstring" read="r.ReadFString({label})"/>
+	<type name="fname" read="r.ReadFName(asset.Names, {label})"/>
+	<type name="fguid" read="readFGuid(r, {label})"/>
+	<type name="pinname" read="readPinName(r, asset, v, {label})"/>
+	<type name="objref" read="objectRefName(asset, r.ReadInt32({label}))"/>
+	<type name="direction" read="pinDirectionName(r.ReadUint8({label}))"/>
+	<type name="pintype" read="readEdGraphPinType(r, asset, v, {label})"/>
+
+	<flag name="pin-type" test="v.hasPinTypeAtAll"/>
+	<flag name="member-reference" test="v.hasMemberReference"/>
+	<flag name="pin-type-const" test="v.hasPinTypeConst"/>
+	<flag name="uobject-wrapper" test="v.hasUObjectWrapper"/>
+	<flag name="single-precision-float" test="v.hasSinglePrecisionFloat"/>
+
+	<!-- FEdGraphTerminalType operator<<, EdGraphNode.cpp:46-116: the value type of a Map pin. -->
+	<struct name="EdGraphTerminalType" func="readEdGraphTerminalType" label-expr="label">
+		<field name="Category" type="pinname" label="TerminalCategory"/>
+		<field name="SubCategory" type="pinname" label="TerminalSubCategory"/>
+		<field name="SubCategoryObject" type="objref" label="TerminalSubCategoryObject"/>
+		<field name="IsConst" type="bool32" label="bTerminalIsConst"/>
+		<field name="IsWeakPointer" type="bool32" label="bTerminalIsWeakPointer"/>
+		<field name="IsUObjectWrapper" type="bool32" label="bTerminalIsUObjectWrapper" if="uobject-wrapper"/>
+	</struct>
+
+	<!-- FEdGraphPinType::Serialize, EdGraphPin.cpp:161-344. Before EDGRAPHPINTYPE_SERIALIZATION the struct is absent. -->
+	<struct name="EdGraphPinType" func="readEdGraphPinType" label-expr="label">
+		<group if="pin-type">
+			<field name="Category" type="pinname" label="PinCategory"/>
+			<field name="SubCategory" type="pinname" label="PinSubCategory"/>
+			<field name="SubCategoryObject" type="objref" label="PinSubCategoryObject"/>
+			<call go="readPinContainer(r, asset, v, {label}, &amp;{out})"/>
+			<field name="IsReference" type="bool32" label="bIsReference"/>
+			<field name="IsWeakPointer" type="bool32" label="bIsWeakPointer"/>
+			<!-- FSimpleMemberReference, EdGraphPin.h:66-72. -->
+			<group if="member-reference">
+				<field name="MemberParent" type="objref" label="MemberReference.MemberParent"/>
+				<field name="MemberName" type="fname" label="MemberReference.MemberName"/>
+				<field name="MemberGuid" type="fguid" label="MemberReference.MemberGuid"/>
+			</group>
+			<field name="IsConst" type="bool32" label="bIsConst" if="pin-type-const"/>
+			<field name="IsUObjectWrapper" type="bool32" label="bIsUObjectWrapper" if="uobject-wrapper"/>
+			<field name="SerializeAsSinglePrecisionFloat" type="bool32" label="bSerializeAsSinglePrecisionFloat" if="single-precision-float"/>
+		</group>
+	</struct>
+
+	<!-- One element of the trailing FUserPinInfo array. -->
+	<struct name="UserPinInfo" func="readUserPinInfo" label-expr="label">
+		<field name="Name" type="pinname" label="PinName"/>
+		<field name="Type" type="pintype" label="PinType"/>
+		<field name="DesiredDirection" type="direction" label="DesiredPinDirection"/>
+		<field name="DefaultValue" type="fstring" label="PinDefaultValue"/>
+	</struct>
+</api-bin>

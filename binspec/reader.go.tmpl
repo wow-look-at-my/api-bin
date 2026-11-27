@@ -19,13 +19,14 @@ func {{ .Func }}(v {{ .GoType }}) string {
 {{ end }}
 {{- range .Spec.Structs }}
 // {{ .Func }} reads one {{ .Name }}.
-func {{ .Func }}({{ $.Spec.Go.Params }}) {{ $.Spec.Go.Model }}{{ .Name }} {
-	var v {{ $.Spec.Go.Model }}{{ .Name }}
-{{ template "items" (scope . .Items) }}	return v
+func {{ .Func }}({{ .Params }}) {{ $.Spec.Go.Model }}{{ .Name }} {
+	var out {{ $.Spec.Go.Model }}{{ .Name }}
+{{ template "items" (scope . .Items) }}	return out
 }
 {{ end }}
 {{- define "items" }}{{ $s := .Struct }}{{ range .Items }}{{ if .Cond }}if {{ .Cond }} {
-{{ end }}{{ if eq .Kind "group" }}{{ template "items" (scope $s .Items) }}{{ else if eq .Kind "skip" }}_ = {{ read $s . }}
-{{ else }}v.{{ .Name }} = {{ read $s . }}
+{{ end }}{{ if eq .Kind "group" }}{{ template "items" (scope $s .Items) }}{{ else if eq .Kind "call" }}{{ stmt $s . }}
+{{ else if eq .Kind "skip" }}_ = {{ read $s . }}
+{{ else }}out.{{ .Name }} = {{ read $s . }}
 {{ end }}{{ if .Cond }}}
 {{ end }}{{ end }}{{ end }}

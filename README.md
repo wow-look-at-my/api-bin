@@ -40,6 +40,8 @@ A spec opens with its bindings: the Go package to generate into, the wire types,
 - `since` and `until` test a version stream. `if` and `unless` test a flag. Several on one element join with "and".
 - `as` converts the value to another type's Go type. `label` overrides the name in the reader's trace label.
 - `<enum>` generates a value-to-name function from its `<value>` rows. Its `unknown` attribute formats a value the table lacks.
+- A `<struct>` takes `label` for a fixed label prefix, or `label-expr` for a Go expression such as a parameter. `params` overrides the parameter list of `<go>` for that reader.
+- `<call go="...">` puts a hand-written Go statement between the steps, for a part of a layout that the language cannot say. `{label}` is the struct's label prefix and `{out}` is the value under construction.
 
 The language has no built-in types. Each `<type>` names the Go expression that reads it, so a spec targets whatever reader its consumer already has.
 
