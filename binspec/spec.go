@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	apidsl "github.com/wow-look-at-my/api-dsl"
+	"github.com/wow-look-at-my/go-containers/set"
 )
 
 // Spec is one parsed document: the bindings to the consumer's code, then
@@ -186,7 +187,7 @@ func (spec *Spec) parseEnum(n *apidsl.Node) error {
 	if strings.Count(e.Unknown, "%d") != 1 || strings.Count(e.Unknown, "%") != 1 {
 		return fmt.Errorf("<enum> %s: unknown needs exactly one %%d", e.Name)
 	}
-	seen := map[int64]bool{}
+	seen := set.New[int64]()
 	for _, c := range n.Children() {
 		if c.Name() != "value" {
 			return fmt.Errorf("<enum> %s: unknown element <%s>", e.Name, c.Name())
@@ -198,10 +199,10 @@ func (spec *Spec) parseEnum(n *apidsl.Node) error {
 		if err != nil || c.Attr("name") == "" {
 			return fmt.Errorf("<enum> %s: <value> needs an integer n and a name", e.Name)
 		}
-		if seen[num] {
+		if seen.Contains(num) {
 			return fmt.Errorf("<enum> %s: value %d is declared twice", e.Name, num)
 		}
-		seen[num] = true
+		seen.Add(num)
 		e.Values = append(e.Values, EnumValue{N: num, Name: c.Attr("name")})
 	}
 	if len(e.Values) == 0 {

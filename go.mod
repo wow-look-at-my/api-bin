@@ -8,6 +8,8 @@ require (
 	github.com/wow-look-at-my/api-dsl v0.0.0 // go-toolchain:branch=master
 )
 
+require github.com/wow-look-at-my/go-containers v0.0.0
+
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
