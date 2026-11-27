@@ -9,9 +9,29 @@ import (
 	apidsl "github.com/wow-look-at-my/api-dsl"
 )
 
-// Spec is one parsed spec document.
+// Spec is one parsed document: the bindings to the consumer's code, then
+// the layouts.
 type Spec struct {
-	Structs []*Struct
+	Go       GoTarget
+	Types    map[string]WireType
+	Versions map[string]string // stream -> Go test with a {name} hole
+	Flags    map[string]string // flag -> Go test
+	Structs  []*Struct
+}
+
+// GoTarget binds the generated file to the consumer's package.
+type GoTarget struct {
+	Package string
+	Params  string   // parameter list of every generated reader
+	Model   string   // prefix of a struct's Go type, "" or "pkg."
+	Imports []string // import paths
+}
+
+// WireType is one type a field may name. Read is the Go expression that
+// reads it, with a {label} hole. GoType is the conversion an as= emits.
+type WireType struct {
+	Read   string
+	GoType string
 }
 
 // Struct is one layout. Func names the generated reader, and Label prefixes
@@ -42,58 +62,117 @@ type Item struct {
 	Items []Item
 }
 
-// wireTypes maps a spec type to the Reader call that reads it. A %q verb
-// receives the trace label.
-var wireTypes = map[string]string{
-	"i32":    "r.ReadInt32(%q)",
-	"u32":    "r.ReadUint32(%q)",
-	"i64":    "r.ReadInt64(%q)",
-	"bool32": "r.ReadBool32(%q)",
-	"guid":   "r.ReadGuid(%q)",
-	"fname":  "r.ReadFName(names, %q)",
-}
-
-// widenTypes maps an as= value to the Go conversion it emits.
-var widenTypes = map[string]string{
-	"i64": "int64",
-}
-
-// unlessFlags maps an unless= value to the summary predicate it negates.
-var unlessFlags = map[string]string{
-	"filter-editor-only": "summary.FilterEditorOnly()",
-	"unversioned":        "summary.IsUnversioned",
-}
-
 // Parse reads a spec document.
 func Parse(src []byte) (*Spec, error) {
 	root, err := apidsl.ParseDOM(src)
 	if err != nil {
 		return nil, err
 	}
-	if root.Name() != "binspec" {
-		return nil, fmt.Errorf("root element is <%s>, want <binspec>", root.Name())
+	if root.Name() != "api-bin" {
+		return nil, fmt.Errorf("root element is <%s>, want <api-bin>", root.Name())
 	}
 	if err := apidsl.CheckAttrs(root); err != nil {
 		return nil, err
 	}
-	spec := &Spec{}
+	spec := &Spec{Types: map[string]WireType{}, Versions: map[string]string{}, Flags: map[string]string{}}
+	var structs []*apidsl.Node
 	for _, n := range root.Children() {
-		if n.Name() != "struct" {
-			return nil, fmt.Errorf("<binspec>: unknown element <%s>", n.Name())
+		switch n.Name() {
+		case "go":
+			err = spec.parseGo(n)
+		case "type":
+			err = spec.parseType(n)
+		case "version":
+			err = parseBinding(n, "stream", spec.Versions)
+		case "flag":
+			err = parseBinding(n, "name", spec.Flags)
+		case "struct":
+			structs = append(structs, n)
+		default:
+			err = fmt.Errorf("<api-bin>: unknown element <%s>", n.Name())
 		}
-		s, err := parseStruct(n)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if spec.Go.Package == "" {
+		return nil, fmt.Errorf("<api-bin> needs a <go> element")
+	}
+	if len(structs) == 0 {
+		return nil, fmt.Errorf("<api-bin> declares no <struct>")
+	}
+	// Layouts parse last, so a binding may follow the struct that uses it.
+	for _, n := range structs {
+		s, err := spec.parseStruct(n)
 		if err != nil {
 			return nil, err
 		}
 		spec.Structs = append(spec.Structs, s)
 	}
-	if len(spec.Structs) == 0 {
-		return nil, fmt.Errorf("<binspec> declares no <struct>")
-	}
 	return spec, nil
 }
 
-func parseStruct(n *apidsl.Node) (*Struct, error) {
+func (spec *Spec) parseGo(n *apidsl.Node) error {
+	if err := apidsl.CheckAttrs(n, "package", "params", "model"); err != nil {
+		return err
+	}
+	if spec.Go.Package != "" {
+		return fmt.Errorf("<api-bin> has more than one <go>")
+	}
+	spec.Go = GoTarget{Package: n.Attr("package"), Params: n.Attr("params"), Model: n.Attr("model")}
+	if spec.Go.Package == "" || spec.Go.Params == "" {
+		return fmt.Errorf("<go> needs package and params")
+	}
+	for _, c := range n.Children() {
+		if c.Name() != "import" {
+			return fmt.Errorf("<go>: unknown element <%s>", c.Name())
+		}
+		if err := apidsl.CheckAttrs(c, "path"); err != nil {
+			return err
+		}
+		if c.Attr("path") == "" {
+			return fmt.Errorf("<import> needs a path")
+		}
+		spec.Go.Imports = append(spec.Go.Imports, c.Attr("path"))
+	}
+	return nil
+}
+
+func (spec *Spec) parseType(n *apidsl.Node) error {
+	if err := apidsl.CheckAttrs(n, "name", "read", "go"); err != nil {
+		return err
+	}
+	name, read := n.Attr("name"), n.Attr("read")
+	if name == "" || !strings.Contains(read, "{label}") {
+		return fmt.Errorf("<type> needs a name and a read with a {label} hole")
+	}
+	if _, dup := spec.Types[name]; dup {
+		return fmt.Errorf("<type> %q is declared twice", name)
+	}
+	spec.Types[name] = WireType{Read: read, GoType: n.Attr("go")}
+	return nil
+}
+
+// parseBinding reads a <version> or a <flag>: a key attribute plus a test.
+func parseBinding(n *apidsl.Node, keyAttr string, into map[string]string) error {
+	if err := apidsl.CheckAttrs(n, keyAttr, "test"); err != nil {
+		return err
+	}
+	key, test := n.Attr(keyAttr), n.Attr("test")
+	if key == "" || test == "" {
+		return fmt.Errorf("<%s> needs %s and test", n.Name(), keyAttr)
+	}
+	if keyAttr == "stream" && !strings.Contains(test, "{name}") {
+		return fmt.Errorf("<version> %q: test has no {name} hole", key)
+	}
+	if _, dup := into[key]; dup {
+		return fmt.Errorf("<%s> %q is declared twice", n.Name(), key)
+	}
+	into[key] = test
+	return nil
+}
+
+func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
 	if err := apidsl.CheckAttrs(n, "name", "func", "label"); err != nil {
 		return nil, err
 	}
@@ -101,7 +180,7 @@ func parseStruct(n *apidsl.Node) (*Struct, error) {
 	if s.Name == "" || s.Func == "" || s.Label == "" {
 		return nil, fmt.Errorf("<struct> needs name, func and label")
 	}
-	items, err := parseItems(n, s.Name)
+	items, err := spec.parseItems(n, s.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -109,10 +188,10 @@ func parseStruct(n *apidsl.Node) (*Struct, error) {
 	return s, nil
 }
 
-func parseItems(parent *apidsl.Node, owner string) ([]Item, error) {
+func (spec *Spec) parseItems(parent *apidsl.Node, owner string) ([]Item, error) {
 	var items []Item
 	for _, n := range parent.Children() {
-		it, err := parseItem(n, owner)
+		it, err := spec.parseItem(n, owner)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +203,7 @@ func parseItems(parent *apidsl.Node, owner string) ([]Item, error) {
 	return items, nil
 }
 
-func parseItem(n *apidsl.Node, owner string) (Item, error) {
+func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	it := Item{Kind: n.Name()}
 	var allowed []string
 	switch it.Kind {
@@ -136,26 +215,24 @@ func parseItem(n *apidsl.Node, owner string) (Item, error) {
 	default:
 		return it, fmt.Errorf("%s: unknown element <%s>", owner, it.Kind)
 	}
-	if err := apidsl.CheckAttrs(n, append(allowed, "since", "until", "unless")...); err != nil {
+	if err := apidsl.CheckAttrs(n, append(allowed, "since", "until", "if", "unless")...); err != nil {
 		return it, fmt.Errorf("%s: %w", owner, err)
 	}
-	cond, err := parseCond(n)
+	cond, err := spec.parseCond(n)
 	if err != nil {
 		return it, fmt.Errorf("%s: %w", owner, err)
 	}
 	it.Cond = cond
 	if it.Kind == KindGroup {
-		it.Items, err = parseItems(n, owner)
+		it.Items, err = spec.parseItems(n, owner)
 		return it, err
 	}
 	it.Name, it.Type, it.As, it.Label = n.Attr("name"), n.Attr("type"), n.Attr("as"), n.Attr("label")
-	if _, ok := wireTypes[it.Type]; !ok {
+	if _, ok := spec.Types[it.Type]; !ok {
 		return it, fmt.Errorf("%s: <%s> has unknown type %q", owner, it.Kind, it.Type)
 	}
-	if it.As != "" {
-		if _, ok := widenTypes[it.As]; !ok {
-			return it, fmt.Errorf("%s: <field> has unknown as %q", owner, it.As)
-		}
+	if it.As != "" && spec.Types[it.As].GoType == "" {
+		return it, fmt.Errorf("%s: as=%q names no <type> with a go attribute", owner, it.As)
 	}
 	if it.Kind == KindField && it.Name == "" {
 		return it, fmt.Errorf("%s: <field> needs a name", owner)
@@ -170,44 +247,52 @@ func parseItem(n *apidsl.Node, owner string) (Item, error) {
 }
 
 // parseCond joins the condition attributes of n into one Go expression.
-func parseCond(n *apidsl.Node) (string, error) {
+func (spec *Spec) parseCond(n *apidsl.Node) (string, error) {
 	var parts []string
-	if u := n.Attr("unless"); u != "" {
-		pred, ok := unlessFlags[u]
-		if !ok {
-			return "", fmt.Errorf("<%s>: unknown unless %q", n.Name(), u)
+	for _, c := range []struct {
+		attr    string
+		negate  bool
+		resolve func(string) (string, error)
+	}{
+		{"if", false, spec.flagTest},
+		{"unless", true, spec.flagTest},
+		{"since", false, spec.versionTest},
+		{"until", true, spec.versionTest},
+	} {
+		v := n.Attr(c.attr)
+		if v == "" {
+			continue
 		}
-		parts = append(parts, "!"+pred)
-	}
-	if v := n.Attr("since"); v != "" {
-		pred, err := versionPredicate(v)
+		test, err := c.resolve(v)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("<%s> %s: %w", n.Name(), c.attr, err)
 		}
-		parts = append(parts, pred)
-	}
-	if v := n.Attr("until"); v != "" {
-		pred, err := versionPredicate(v)
-		if err != nil {
-			return "", err
+		if c.negate {
+			test = "!" + test
 		}
-		parts = append(parts, "!"+pred)
+		parts = append(parts, test)
 	}
 	return strings.Join(parts, " && "), nil
 }
 
-// versionPredicate turns "ue4:NAME" or "ue5:NAME" into the summary check
-// that is true from that object version on.
-func versionPredicate(ref string) (string, error) {
+func (spec *Spec) flagTest(name string) (string, error) {
+	test, ok := spec.Flags[name]
+	if !ok {
+		return "", fmt.Errorf("unknown flag %q", name)
+	}
+	return test, nil
+}
+
+// versionTest turns "stream:NAME" into the test that is true from that
+// version on.
+func (spec *Spec) versionTest(ref string) (string, error) {
 	stream, name, ok := strings.Cut(ref, ":")
 	if !ok || name == "" {
-		return "", fmt.Errorf("version %q is not ue4:NAME or ue5:NAME", ref)
+		return "", fmt.Errorf("version %q is not stream:NAME", ref)
 	}
-	switch stream {
-	case "ue4":
-		return "summary.UE4Ver(uasset.VER_UE4_" + name + ")", nil
-	case "ue5":
-		return "summary.UE5Ver(uasset.UE5_" + name + ")", nil
+	test, ok := spec.Versions[stream]
+	if !ok {
+		return "", fmt.Errorf("unknown version stream %q", stream)
 	}
-	return "", fmt.Errorf("version %q is not ue4:NAME or ue5:NAME", ref)
+	return strings.ReplaceAll(test, "{name}", name), nil
 }

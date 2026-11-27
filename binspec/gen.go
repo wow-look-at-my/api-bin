@@ -7,6 +7,8 @@ import (
 	_ "embed"
 	"fmt"
 	"go/format"
+	"strconv"
+	"strings"
 	"text/template"
 )
 
@@ -19,16 +21,12 @@ type itemScope struct {
 	Items  []Item
 }
 
-var readerTemplate = template.Must(template.New("reader").Funcs(template.FuncMap{
-	"scope": func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
-	"read":  readExpr,
-}).Parse(readerTemplateText))
-
 // readExpr returns the Go expression that reads one item off the wire.
-func readExpr(s *Struct, it Item) string {
-	expr := fmt.Sprintf(wireTypes[it.Type], s.Label+"."+it.Label)
+func (spec *Spec) readExpr(s *Struct, it Item) string {
+	label := strconv.Quote(s.Label + "." + it.Label)
+	expr := strings.ReplaceAll(spec.Types[it.Type].Read, "{label}", label)
 	if it.As != "" {
-		return widenTypes[it.As] + "(" + expr + ")"
+		return spec.Types[it.As].GoType + "(" + expr + ")"
 	}
 	return expr
 }
@@ -36,12 +34,19 @@ func readExpr(s *Struct, it Item) string {
 // Generate returns the gofmt-ed Go source of the readers in spec. The source
 // argument names the spec file in the generated header.
 func Generate(spec *Spec, source string) ([]byte, error) {
+	tmpl, err := template.New("reader").Funcs(template.FuncMap{
+		"scope": func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
+		"read":  spec.readExpr,
+	}).Parse(readerTemplateText)
+	if err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 	data := struct {
 		Spec   *Spec
 		Source string
 	}{spec, source}
-	if err := readerTemplate.Execute(&buf, data); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, err
 	}
 	out, err := format.Source(buf.Bytes())

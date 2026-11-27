@@ -1,5 +1,21 @@
 <?xml version="1.1" encoding="UTF-8"?>
-<binspec>
+<api-bin>
+	<go package="main" params="r *Reader, summary *uasset.PackageSummary, names []string" model="uasset.">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="i32" read="r.ReadInt32({label})"/>
+	<type name="u32" read="r.ReadUint32({label})"/>
+	<type name="i64" go="int64" read="r.ReadInt64({label})"/>
+	<type name="bool32" read="r.ReadBool32({label})"/>
+	<type name="guid" read="r.ReadGuid({label})"/>
+	<type name="fname" read="r.ReadFName(names, {label})"/>
+
+	<version stream="ue4" test="summary.UE4Ver(uasset.VER_UE4_{name})"/>
+	<version stream="ue5" test="summary.UE5Ver(uasset.UE5_{name})"/>
+	<flag name="filter-editor-only" test="summary.FilterEditorOnly()"/>
+	<flag name="unversioned" test="summary.IsUnversioned"/>
+
 	<struct name="FObjectImport" func="readImportEntry" label="ImportEntry">
 		<field name="ClassPackage" type="fname"/>
 		<field name="ClassName" type="fname"/>
@@ -45,4 +61,4 @@
 			<field name="ScriptSerializationEndOffset" type="i64"/>
 		</group>
 	</struct>
-</binspec>
+</api-bin>
