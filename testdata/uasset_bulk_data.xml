@@ -1,0 +1,73 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main" params="r *Reader, label string">
+		<import path="github.com/wow-look-at-my/uasset/uasset"/>
+	</go>
+
+	<type name="u8" read="r.ReadUint8({label})"/>
+	<type name="u16" read="r.ReadUint16({label})"/>
+	<type name="i32" read="r.ReadInt32({label})"/>
+	<type name="u32" read="r.ReadUint32({label})"/>
+	<type name="i64" go="int64" read="r.ReadInt64({label})"/>
+	<type name="guid" read="r.ReadGuid({label})"/>
+	<type name="bytes20" read="r.ReadBytes(20, {label})"/>
+
+	<!-- EBulkDataFlags bits that change the layout. Each test reads the flags of the value under construction. -->
+	<flag name="size-64" test="out.Flags&amp;uasset.BulkDataSize64Bit != 0"/>
+	<flag name="bad-data-version" test="out.Flags&amp;uasset.BulkDataBadDataVersion != 0"/>
+	<flag name="duplicate" test="out.Flags&amp;uasset.BulkDataDuplicateNonOptional != 0"/>
+
+	<!-- FByteBulkData metadata: the flags pick 32-bit or 64-bit sizes. -->
+	<struct name="byteBulkHeader" go="byteBulkHeader" func="readByteBulkHeader" label-expr="label">
+		<field name="Flags" type="u32"/>
+		<group if="size-64">
+			<field name="ElementCount" type="i64" label="ElementCount64"/>
+			<field name="SizeOnDisk" type="i64" label="SizeOnDisk64"/>
+		</group>
+		<group unless="size-64">
+			<field name="ElementCount" type="i32" as="i64"/>
+			<field name="SizeOnDisk" type="i32" as="i64"/>
+		</group>
+		<field name="OffsetInFile" type="i64"/>
+	</struct>
+
+	<!--
+		FEditorBulkData metadata (EditorBulkData.cpp FEditorBulkData::Serialize),
+		up to the payload size. The flags decide whether an offset follows, and
+		the caller reads it. PayloadContentId is an FIoHash.
+	-->
+	<struct name="editorBulkHeader" go="editorBulkHeader" func="readEditorBulkHeader" label-expr="label">
+		<field name="Flags" type="u32"/>
+		<skip type="guid" label="BulkDataId"/>
+		<field name="PayloadContentId" type="bytes20"/>
+		<field name="PayloadSize" type="i64"/>
+	</struct>
+
+	<!-- Legacy inline FBulkMetaResource of a cooked mip (operator<<, BulkData.cpp:190-255). -->
+	<struct name="bulkMetaResource" go="bulkMetaResource" func="readBulkMetaResource" label-expr="label">
+		<field name="Flags" type="u32" label="bulkFlags"/>
+		<group if="size-64">
+			<skip type="i64" label="elementCount"/>
+			<field name="SizeOnDisk" type="i64" label="sizeOnDisk"/>
+		</group>
+		<group unless="size-64">
+			<skip type="i32" label="elementCount"/>
+			<field name="SizeOnDisk" type="i32" as="i64" label="sizeOnDisk"/>
+		</group>
+		<field name="Offset" type="i64" label="offsetInFile"/>
+		<skip type="u16" label="badDataVersionDummy" if="bad-data-version"/>
+		<group if="duplicate">
+			<skip type="u32" label="duplicateFlags"/>
+			<skip type="i64" label="duplicateSizeOnDisk" if="size-64"/>
+			<skip type="i32" label="duplicateSizeOnDisk" unless="size-64"/>
+			<skip type="i64" label="duplicateOffset"/>
+		</group>
+	</struct>
+
+	<!-- FMaterialResourceLocOnDisk (MaterialShared.h:3160-3176). -->
+	<struct name="shaderMapLoc" go="shaderMapLoc" func="readShaderMapLoc" label-expr="label">
+		<field name="Offset" type="u32"/>
+		<field name="FeatureLevel" type="u8"/>
+		<field name="QualityLevel" type="u8"/>
+	</struct>
+</api-bin>
