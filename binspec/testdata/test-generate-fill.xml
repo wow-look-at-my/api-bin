@@ -1,0 +1,7 @@
+<api-bin>
+	<go package="p" params="r *rd, out *Rec"/>
+	<type name="u32" read="r.u32()"/>
+	<struct name="Rec" func="readRec" label="" fill="true">
+		<field name="A" type="u32"/>
+	</struct>
+</api-bin>

@@ -48,6 +48,8 @@ A spec opens with its bindings: the Go package to generate into, the wire types,
 - `<switch>` reads a tag and runs the steps of the `<case value="...">` that matches. `unknown` is a Go statement for a tag that no case names, with a `{value}` hole.
 - `<when>` reads a boolean and runs its steps only when it is true.
 - `go` on a `<struct>` names its Go type outright, for a value that is not a member of the model package.
+- `fill="true"` on a `<struct>` makes its reader fill a parameter named `out` and return nothing.
+- A `<type>` may leave the `{label}` hole out, for a reader that keeps no trace.
 
 The language has no built-in types. Each `<type>` names the Go expression that reads it, so a spec targets whatever reader its consumer already has.
 

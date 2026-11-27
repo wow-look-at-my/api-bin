@@ -85,6 +85,21 @@ func TestGenerateBranchShapes(t *testing.T) {
 	assert.Contains(t, s, `fail(tag, "Rec")`)
 }
 
+func TestGenerateFillShapes(t *testing.T) {
+	spec, err := Parse([]byte(testGenerateFillXml))
+	require.NoError(t, err)
+	out, err := Generate(spec, "x.xml")
+	require.NoError(t, err)
+	s := string(out)
+	assert.Contains(t, s, "func readRec(r *rd, out *Rec) {")
+	assert.Contains(t, s, "out.A = r.u32()")
+	assert.NotContains(t, s, "return")
+	assert.NotContains(t, s, "var out")
+}
+
+//go:embed testdata/test-generate-fill.xml
+var testGenerateFillXml string
+
 func TestGenerateArrayShapes(t *testing.T) {
 	spec, err := Parse(wrap(`<array of="int32" func="readInts" label="Ints" count="i32" elem="i32" alloc="true" check="clamp(&amp;{count}, {label})"/>`))
 	require.NoError(t, err)
@@ -145,7 +160,9 @@ func TestParseRejects(t *testing.T) {
 		"case body":       {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1"><field type="i32"/></case></switch></struct>`), "<field> needs a name"},
 		"when empty":      {wrap(`<struct name="R" func="f" label="R"><when type="i32" label="H"/></struct>`), "<when> is empty"},
 		"null-if in case": {wrap(`<struct name="R" func="f" label="R"><switch type="i32" label="K"><case value="1"><null-if type="i32" label="N"/></case></switch></struct>`), `<null-if> needs pointer="true"`},
-		"type no hole":    {wrap(`<type name="u8" read="x()"/>` + ok), "{label} hole"},
+		"type no read":    {wrap(`<type name="u8"/>` + ok), "needs a name and a read"},
+		"fill pointer":    {wrap(`<struct name="R" func="f" label="R" fill="true" pointer="true"><field name="A" type="i32"/></struct>`), "fill takes neither pointer nor init"},
+		"fill bool":       {wrap(`<struct name="R" func="f" label="R" fill="1"><field name="A" type="i32"/></struct>`), "want true or false"},
 		"version no hole": {wrap(`<version stream="w" test="x"/>` + ok), "{name} hole"},
 		"second go":       {wrap(`<go package="q" params="r"/>` + ok), "more than one <go>"},
 		"import no path":  {[]byte(`<api-bin><go package="p" params="r"><import/></go>` + ok + `</api-bin>`), "<import> needs a path"},

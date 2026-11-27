@@ -64,6 +64,7 @@ type Struct struct {
 	Pointer   bool   // the reader returns a pointer, and may return nil
 	Init      string // field list of the value's composite literal
 	GoType    string // Go type of the value: the go attribute, or model plus name
+	Fill      bool   // the reader fills an out parameter and returns nothing
 	Items     []Item
 }
 
@@ -190,8 +191,9 @@ func (spec *Spec) parseType(n *apidsl.Node) error {
 		return err
 	}
 	name, read := n.Attr("name"), n.Attr("read")
-	if name == "" || !strings.Contains(read, "{label}") {
-		return fmt.Errorf("<type> needs a name and a read with a {label} hole")
+	// The {label} hole is optional: a reader with no trace takes no label.
+	if name == "" || read == "" {
+		return fmt.Errorf("<type> needs a name and a read")
 	}
 	if _, dup := spec.Types[name]; dup {
 		return fmt.Errorf("<type> %q is declared twice", name)
@@ -256,14 +258,22 @@ func parseBinding(n *apidsl.Node, keyAttr string, into map[string]string) error 
 }
 
 func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
-	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params", "pointer", "init", "go"); err != nil {
+	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params", "pointer", "init", "go", "fill"); err != nil {
 		return nil, err
+	}
+	fill, err := boolAttr(n, "fill")
+	if err != nil {
+		return nil, err
+	}
+	if fill && (n.Attr("pointer") == "true" || n.Attr("init") != "") {
+		return nil, fmt.Errorf("<struct> %s: fill takes neither pointer nor init", n.Attr("name"))
 	}
 	s := &Struct{
 		GoType: cmp.Or(n.Attr("go"), spec.Go.Model+n.Attr("name")),
 		Name:   n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
 		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
 		Pointer: n.Attr("pointer") == "true", Init: n.Attr("init"),
+		Fill: fill,
 	}
 	if p := n.Attr("pointer"); p != "" && p != "true" && p != "false" {
 		return nil, fmt.Errorf("<struct> %s: pointer is %q, want true or false", s.Name, p)

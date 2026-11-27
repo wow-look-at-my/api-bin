@@ -24,6 +24,11 @@ func {{ .Func }}(v {{ .GoType }}) string {
 }
 {{ end }}
 {{- range .Spec.Structs }}
+{{- if .Fill }}
+// {{ .Func }} reads one {{ .Name }} into out.
+func {{ .Func }}({{ .Params }}) {
+{{ template "items" (scope . .Items) }}}
+{{ else }}
 // {{ .Func }} reads one {{ .Name }}.
 func {{ .Func }}({{ .Params }}) {{ if .Pointer }}*{{ end }}{{ .GoType }} {
 {{- if or .Pointer .Init }}
@@ -33,7 +38,7 @@ func {{ .Func }}({{ .Params }}) {{ if .Pointer }}*{{ end }}{{ .GoType }} {
 {{- end }}
 {{ template "items" (scope . .Items) }}	return out
 }
-{{ end }}
+{{ end }}{{ end }}
 {{- range .Spec.Arrays }}
 // {{ .Func }} reads a counted array of {{ .Of }}.
 func {{ .Func }}({{ .Params }}) []{{ $.Spec.Go.Model }}{{ .Of }} {
