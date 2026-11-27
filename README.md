@@ -39,6 +39,7 @@ A spec opens with its bindings: the Go package to generate into, the wire types,
 - `<field>` reads a value into the struct member of that name. `<skip>` reads and discards one. `<group>` puts several steps under one condition.
 - `since` and `until` test a version stream. `if` and `unless` test a flag. Several on one element join with "and".
 - `as` converts the value to another type's Go type. `label` overrides the name in the reader's trace label.
+- `<enum>` generates a value-to-name function from its `<value>` rows. Its `unknown` attribute formats a value the table lacks.
 
 The language has no built-in types. Each `<type>` names the Go expression that reads it, so a spec targets whatever reader its consumer already has.
 

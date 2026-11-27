@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"fmt"
 	"go/format"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -42,10 +43,15 @@ func Generate(spec *Spec, source string) ([]byte, error) {
 		return nil, err
 	}
 	var buf bytes.Buffer
+	imports := spec.Go.Imports
+	if len(spec.Enums) > 0 && !slices.Contains(imports, "fmt") {
+		imports = append([]string{"fmt"}, imports...)
+	}
 	data := struct {
-		Spec   *Spec
-		Source string
-	}{spec, source}
+		Spec    *Spec
+		Source  string
+		Imports []string
+	}{spec, source, imports}
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, err
 	}

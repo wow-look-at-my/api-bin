@@ -89,14 +89,20 @@ func TestParseRejects(t *testing.T) {
 		"second go":        {wrap(`<go package="q" params="r"/>` + ok), "more than one <go>"},
 		"import no path":   {[]byte(`<api-bin><go package="p" params="r"><import/></go>` + ok + `</api-bin>`), "<import> needs a path"},
 		"go child":         {[]byte(`<api-bin><go package="p" params="r"><x/></go>` + ok + `</api-bin>`), "unknown element <x>"},
-		"go no params":     {[]byte(`<api-bin><go package="p"/>` + ok + `</api-bin>`), "needs package and params"},
+		"go no params":     {[]byte(`<api-bin><go package="p"/>` + ok + `</api-bin>`), "needs params when"},
+		"go no package":    {[]byte(`<api-bin><go params="r"/>` + ok + `</api-bin>`), "<go> needs a package"},
+		"enum attrs":       {wrap(`<enum name="E" func="f" unknown="x%d"><value n="0" name="A"/></enum>`), "needs name, func and go"},
+		"enum unknown":     {wrap(`<enum name="E" func="f" go="uint8" unknown="x"><value n="0" name="A"/></enum>`), "exactly one %d"},
+		"enum bad n":       {wrap(`<enum name="E" func="f" go="uint8" unknown="x%d"><value n="a" name="A"/></enum>`), "integer n and a name"},
+		"enum dup":         {wrap(`<enum name="E" func="f" go="uint8" unknown="x%d"><value n="1" name="A"/><value n="1" name="B"/></enum>`), "declared twice"},
+		"enum empty":       {wrap(`<enum name="E" func="f" go="uint8" unknown="x%d"/>`), "has no <value>"},
+		"enum child":       {wrap(`<enum name="E" func="f" go="uint8" unknown="x%d"><item/></enum>`), "unknown element <item>"},
+		"enum value attr":  {wrap(`<enum name="E" func="f" go="uint8" unknown="x%d"><value n="1" name="A" doc="d"/></enum>`), `unknown attribute "doc"`},
 		"flag no test":     {wrap(`<flag name="z"/>` + ok), "needs name and test"},
 		"malformed xml":    {[]byte(`<api-bin>`), "EOF"},
 		"unknown item":     {wrap(`<struct name="R" func="f" label="R"><array/></struct>`), "unknown element <array>"},
 		"root attr":        {[]byte(`<api-bin version="1">` + ok + `</api-bin>`), `unknown attribute "version"`},
-		"bad generated go": {nil, ""},
 	}
-	delete(cases, "bad generated go")
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			_, err := Parse(c.doc)

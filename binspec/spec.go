@@ -4,6 +4,7 @@ package binspec
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	apidsl "github.com/wow-look-at-my/api-dsl"
@@ -17,6 +18,22 @@ type Spec struct {
 	Versions map[string]string // stream -> Go test with a {name} hole
 	Flags    map[string]string // flag -> Go test
 	Structs  []*Struct
+	Enums    []*Enum
+}
+
+// Enum is one value-to-name table.
+type Enum struct {
+	Name    string
+	Func    string
+	GoType  string
+	Unknown string
+	Values  []EnumValue
+}
+
+// EnumValue is one row of an Enum.
+type EnumValue struct {
+	N    int64
+	Name string
 }
 
 // GoTarget binds the generated file to the consumer's package.
@@ -88,6 +105,8 @@ func Parse(src []byte) (*Spec, error) {
 			err = parseBinding(n, "name", spec.Flags)
 		case "struct":
 			structs = append(structs, n)
+		case "enum":
+			err = spec.parseEnum(n)
 		default:
 			err = fmt.Errorf("<api-bin>: unknown element <%s>", n.Name())
 		}
@@ -98,8 +117,11 @@ func Parse(src []byte) (*Spec, error) {
 	if spec.Go.Package == "" {
 		return nil, fmt.Errorf("<api-bin> needs a <go> element")
 	}
-	if len(structs) == 0 {
-		return nil, fmt.Errorf("<api-bin> declares no <struct>")
+	if len(structs) == 0 && len(spec.Enums) == 0 {
+		return nil, fmt.Errorf("<api-bin> declares no <struct> and no <enum>")
+	}
+	if len(structs) > 0 && spec.Go.Params == "" {
+		return nil, fmt.Errorf("<go> needs params when the spec has a <struct>")
 	}
 	// Layouts parse last, so a binding may follow the struct that uses it.
 	for _, n := range structs {
@@ -120,8 +142,8 @@ func (spec *Spec) parseGo(n *apidsl.Node) error {
 		return fmt.Errorf("<api-bin> has more than one <go>")
 	}
 	spec.Go = GoTarget{Package: n.Attr("package"), Params: n.Attr("params"), Model: n.Attr("model")}
-	if spec.Go.Package == "" || spec.Go.Params == "" {
-		return fmt.Errorf("<go> needs package and params")
+	if spec.Go.Package == "" {
+		return fmt.Errorf("<go> needs a package")
 	}
 	for _, c := range n.Children() {
 		if c.Name() != "import" {
@@ -150,6 +172,42 @@ func (spec *Spec) parseType(n *apidsl.Node) error {
 		return fmt.Errorf("<type> %q is declared twice", name)
 	}
 	spec.Types[name] = WireType{Read: read, GoType: n.Attr("go")}
+	return nil
+}
+
+func (spec *Spec) parseEnum(n *apidsl.Node) error {
+	if err := apidsl.CheckAttrs(n, "name", "func", "go", "unknown"); err != nil {
+		return err
+	}
+	e := &Enum{Name: n.Attr("name"), Func: n.Attr("func"), GoType: n.Attr("go"), Unknown: n.Attr("unknown")}
+	if e.Name == "" || e.Func == "" || e.GoType == "" {
+		return fmt.Errorf("<enum> needs name, func and go")
+	}
+	if strings.Count(e.Unknown, "%d") != 1 || strings.Count(e.Unknown, "%") != 1 {
+		return fmt.Errorf("<enum> %s: unknown needs exactly one %%d", e.Name)
+	}
+	seen := map[int64]bool{}
+	for _, c := range n.Children() {
+		if c.Name() != "value" {
+			return fmt.Errorf("<enum> %s: unknown element <%s>", e.Name, c.Name())
+		}
+		if err := apidsl.CheckAttrs(c, "n", "name"); err != nil {
+			return err
+		}
+		num, err := strconv.ParseInt(c.Attr("n"), 10, 64)
+		if err != nil || c.Attr("name") == "" {
+			return fmt.Errorf("<enum> %s: <value> needs an integer n and a name", e.Name)
+		}
+		if seen[num] {
+			return fmt.Errorf("<enum> %s: value %d is declared twice", e.Name, num)
+		}
+		seen[num] = true
+		e.Values = append(e.Values, EnumValue{N: num, Name: c.Attr("name")})
+	}
+	if len(e.Values) == 0 {
+		return fmt.Errorf("<enum> %s has no <value>", e.Name)
+	}
+	spec.Enums = append(spec.Enums, e)
 	return nil
 }
 

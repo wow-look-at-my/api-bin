@@ -1,0 +1,41 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<api-bin>
+	<go package="main"/>
+
+	<enum name="EEdGraphPinDirection" func="pinDirectionName" go="uint8" unknown="&lt;direction_%d&gt;">
+		<value n="0" name="Input"/>
+		<value n="1" name="Output"/>
+	</enum>
+
+	<enum name="EPinContainerType" func="containerTypeName" go="uint8" unknown="&lt;container_%d&gt;">
+		<value n="0" name="None"/>
+		<value n="1" name="Array"/>
+		<value n="2" name="Set"/>
+		<value n="3" name="Map"/>
+	</enum>
+
+	<enum name="EPureState" func="pureStateName" go="uint8" unknown="&lt;purestate_%d&gt;">
+		<value n="0" name="Pure"/>
+		<value n="1" name="Impure"/>
+		<value n="2" name="UseDefault"/>
+	</enum>
+
+	<enum name="EDateTimeStyle" func="dateTimeStyleName" go="int8" unknown="style%d">
+		<value n="0" name="Default"/>
+		<value n="1" name="Short"/>
+		<value n="2" name="Medium"/>
+		<value n="3" name="Long"/>
+		<value n="4" name="Full"/>
+		<value n="5" name="Custom"/>
+	</enum>
+
+	<enum name="ERoundingMode" func="roundingModeName" go="int8" unknown="mode%d">
+		<value n="0" name="HalfToEven"/>
+		<value n="1" name="HalfFromZero"/>
+		<value n="2" name="HalfToZero"/>
+		<value n="3" name="FromZero"/>
+		<value n="4" name="ToZero"/>
+		<value n="5" name="ToNegativeInfinity"/>
+		<value n="6" name="ToPositiveInfinity"/>
+	</enum>
+</api-bin>
