@@ -10,6 +10,8 @@
 	<type name="bool32" read="r.ReadBool32({label})"/>
 	<type name="guid" read="r.ReadGuid({label})"/>
 	<type name="fname" read="r.ReadFName(names, {label})"/>
+	<type name="u16" read="r.ReadUint16({label})"/>
+	<type name="fstring" read="r.ReadFString({label})"/>
 
 	<version stream="ue4" test="summary.UE4Ver(uasset.VER_UE4_{name})"/>
 	<version stream="ue5" test="summary.UE5Ver(uasset.UE5_{name})"/>
@@ -60,5 +62,13 @@
 			<field name="ScriptSerializationStartOffset" type="i64"/>
 			<field name="ScriptSerializationEndOffset" type="i64"/>
 		</group>
+	</struct>
+
+	<struct name="EngineVersion" func="readEngineVersion" label-expr="prefix" params="r *Reader, prefix string">
+		<field name="Major" type="u16"/>
+		<field name="Minor" type="u16"/>
+		<field name="Patch" type="u16"/>
+		<field name="Changelist" type="u32"/>
+		<field name="Branch" type="fstring"/>
 	</struct>
 </api-bin>

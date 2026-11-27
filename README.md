@@ -44,6 +44,7 @@ A spec opens with its bindings: the Go package to generate into, the wire types,
 - `<call go="...">` puts a hand-written Go statement between the steps, for a part of a layout that the language cannot say. `{label}` is the struct's label prefix and `{out}` is the value under construction.
 - `pointer="true"` on a `<struct>` makes its reader return a pointer. A `<null-if>` step then reads a value and returns nil when it is true. `init` gives the starting members of the value.
 - `<bits>` reads one integer and sets a boolean member from each `<bit n="..." name="...">` row.
+- `<array>` generates a reader for a counted array: a `count` type, then that many `elem` values. `check` is a Go statement that may reject or adjust `{count}`. `nullable` drops a nil element, and `alloc` allocates the slice even when it is empty.
 
 The language has no built-in types. Each `<type>` names the Go expression that reads it, so a spec targets whatever reader its consumer already has.
 

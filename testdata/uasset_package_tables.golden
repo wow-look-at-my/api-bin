@@ -71,3 +71,14 @@ func readExportEntry(r *Reader, summary *uasset.PackageSummary, names []string) 
 	}
 	return out
 }
+
+// readEngineVersion reads one EngineVersion.
+func readEngineVersion(r *Reader, prefix string) uasset.EngineVersion {
+	var out uasset.EngineVersion
+	out.Major = r.ReadUint16(prefix + ".Major")
+	out.Minor = r.ReadUint16(prefix + ".Minor")
+	out.Patch = r.ReadUint16(prefix + ".Patch")
+	out.Changelist = r.ReadUint32(prefix + ".Changelist")
+	out.Branch = r.ReadFString(prefix + ".Branch")
+	return out
+}

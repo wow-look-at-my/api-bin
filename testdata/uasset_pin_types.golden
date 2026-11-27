@@ -2,7 +2,10 @@
 
 package main
 
-import "github.com/wow-look-at-my/uasset/uasset"
+import (
+	"fmt"
+	"github.com/wow-look-at-my/uasset/uasset"
+)
 
 // readEdGraphTerminalType reads one EdGraphTerminalType.
 func readEdGraphTerminalType(r *Reader, asset *uasset.UAsset, v pinVersions, label string) uasset.EdGraphTerminalType {
@@ -43,6 +46,16 @@ func readEdGraphPinType(r *Reader, asset *uasset.UAsset, v pinVersions, label st
 			out.SerializeAsSinglePrecisionFloat = r.ReadBool32(label + ".bSerializeAsSinglePrecisionFloat")
 		}
 	}
+	return out
+}
+
+// readFGuid reads one FGuid.
+func readFGuid(r *Reader, label string) uasset.FGuid {
+	var out uasset.FGuid
+	out.A = r.ReadUint32(label + ".A")
+	out.B = r.ReadUint32(label + ".B")
+	out.C = r.ReadUint32(label + ".C")
+	out.D = r.ReadUint32(label + ".D")
 	return out
 }
 
@@ -107,5 +120,18 @@ func readUserPinInfo(r *Reader, asset *uasset.UAsset, v pinVersions, label strin
 	out.Type = readEdGraphPinType(r, asset, v, label+".PinType")
 	out.DesiredDirection = pinDirectionName(r.ReadUint8(label + ".DesiredPinDirection"))
 	out.DefaultValue = r.ReadFString(label + ".PinDefaultValue")
+	return out
+}
+
+// readPinRefArray reads a counted array of EdGraphPinRef.
+func readPinRefArray(r *Reader, label string) []uasset.EdGraphPinRef {
+	count := r.ReadInt32(label + ".count")
+	checkPinRefCount(r, count, label)
+	var out []uasset.EdGraphPinRef
+	for i := range count {
+		if e := readPinRef(r, fmt.Sprintf("%s[%d]", label, i)); e != nil {
+			out = append(out, *e)
+		}
+	}
 	return out
 }

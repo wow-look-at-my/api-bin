@@ -63,6 +63,20 @@ func TestGenerateShapes(t *testing.T) {
 	assert.Contains(t, s, `_ = r.I64("Rec.Pad")`)
 }
 
+func TestGenerateArrayShapes(t *testing.T) {
+	spec, err := Parse(wrap(`<array of="int32" func="readInts" label="Ints" count="i32" elem="i32" alloc="true" check="clamp(&amp;{count}, {label})"/>`))
+	require.NoError(t, err)
+	out, err := Generate(spec, "x.xml")
+	require.NoError(t, err)
+	s := string(out)
+	assert.Contains(t, s, `import "fmt"`)
+	assert.Contains(t, s, "func readInts(r *Reader) []int32 {")
+	assert.Contains(t, s, `count := r.I32("Ints.count")`)
+	assert.Contains(t, s, `clamp(&count, "Ints")`)
+	assert.Contains(t, s, "out := make([]int32, 0, count)")
+	assert.Contains(t, s, `out = append(out, r.I32(fmt.Sprintf("Ints[%d]", i)))`)
+}
+
 func TestParseRejects(t *testing.T) {
 	ok := `<struct name="R" func="f" label="R"><field name="A" type="i32"/></struct>`
 	cases := map[string]struct {
@@ -73,6 +87,13 @@ func TestParseRejects(t *testing.T) {
 		"no go":           {[]byte(`<api-bin>` + ok + `</api-bin>`), "needs a <go>"},
 		"no struct":       {wrap(``), "declares no <struct>"},
 		"unknown element": {wrap(`<table/>` + ok), "unknown element <table>"},
+		"array attrs":     {wrap(`<array func="f" label="A" count="i32" elem="i32"/>`), "<array> needs of and func"},
+		"array labels":    {wrap(`<array of="T" func="f" count="i32" elem="i32"/>`), "exactly one of label and label-expr"},
+		"array type":      {wrap(`<array of="T" func="f" label="A" count="u8" elem="i32"/>`), `unknown type "u8"`},
+		"array bool":      {wrap(`<array of="T" func="f" label="A" count="i32" elem="i32" alloc="yes"/>`), "want true or false"},
+		"array nullable":  {wrap(`<array of="T" func="f" label="A" count="i32" elem="i32" nullable="1"/>`), "want true or false"},
+		"array attr":      {wrap(`<array of="T" func="f" label="A" count="i32" elem="i32" max="4"/>`), `unknown attribute "max"`},
+		"array params":    {[]byte(`<api-bin><go package="p"/><type name="i32" read="r({label})"/><array of="T" func="f" label="A" count="i32" elem="i32"/></api-bin>`), "has no params"},
 		"unknown attr":    {wrap(`<struct name="R" func="f" label="R"><field name="A" type="i32" size="4"/></struct>`), `unknown attribute "size"`},
 		"unknown type":    {wrap(`<struct name="R" func="f" label="R"><field name="A" type="u8"/></struct>`), `unknown type "u8"`},
 		"unknown stream":  {wrap(`<struct name="R" func="f" label="R"><field name="A" type="i32" since="w:1"/></struct>`), `unknown version stream "w"`},

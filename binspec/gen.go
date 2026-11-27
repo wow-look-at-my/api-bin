@@ -52,13 +52,16 @@ func Generate(spec *Spec, source string) ([]byte, error) {
 		"scope": func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
 		"read":  spec.readExpr,
 		"stmt":  callStmt,
+		"count": spec.countExpr,
+		"elem":  spec.elemExpr,
+		"check": checkStmt,
 	}).Parse(readerTemplateText)
 	if err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
 	imports := spec.Go.Imports
-	if len(spec.Enums) > 0 && !slices.Contains(imports, "fmt") {
+	if len(spec.Enums)+len(spec.Arrays) > 0 && !slices.Contains(imports, "fmt") {
 		imports = append([]string{"fmt"}, imports...)
 	}
 	data := struct {

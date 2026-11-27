@@ -57,6 +57,18 @@
 		</group>
 	</struct>
 
+	<!-- FGuid: little-endian uint32s A, B, C, D (Guid.cpp:584-587). -->
+	<struct name="FGuid" func="readFGuid" label-expr="label" params="r *Reader, label string">
+		<field name="A" type="u32"/>
+		<field name="B" type="u32"/>
+		<field name="C" type="u32"/>
+		<field name="D" type="u32"/>
+	</struct>
+
+	<!-- SerializePinArray of pin references. A null entry is dropped. -->
+	<array of="EdGraphPinRef" func="readPinRefArray" label-expr="label" params="r *Reader, label string"
+		count="i32" elem="pinref" nullable="true" check="checkPinRefCount(r, {count}, {label})"/>
+
 	<!-- One pin reference: [bNullPtr] or [bNullPtr=0][node][guid]. -->
 	<struct name="EdGraphPinRef" func="readPinRef" label-expr="label" params="r *Reader, label string" pointer="true">
 		<null-if type="bool32" label="bNullPtr"/>

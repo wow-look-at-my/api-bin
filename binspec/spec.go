@@ -20,6 +20,7 @@ type Spec struct {
 	Flags    map[string]string // flag -> Go test
 	Structs  []*Struct
 	Enums    []*Enum
+	Arrays   []*Array
 }
 
 // Enum is one value-to-name table.
@@ -106,7 +107,7 @@ func Parse(src []byte) (*Spec, error) {
 		return nil, err
 	}
 	spec := &Spec{Types: map[string]WireType{}, Versions: map[string]string{}, Flags: map[string]string{}}
-	var structs []*apidsl.Node
+	var structs, arrays []*apidsl.Node
 	for _, n := range root.Children() {
 		switch n.Name() {
 		case "go":
@@ -121,6 +122,8 @@ func Parse(src []byte) (*Spec, error) {
 			structs = append(structs, n)
 		case "enum":
 			err = spec.parseEnum(n)
+		case "array":
+			arrays = append(arrays, n)
 		default:
 			err = fmt.Errorf("<api-bin>: unknown element <%s>", n.Name())
 		}
@@ -131,8 +134,13 @@ func Parse(src []byte) (*Spec, error) {
 	if spec.Go.Package == "" {
 		return nil, fmt.Errorf("<api-bin> needs a <go> element")
 	}
-	if len(structs) == 0 && len(spec.Enums) == 0 {
-		return nil, fmt.Errorf("<api-bin> declares no <struct> and no <enum>")
+	if len(structs) == 0 && len(spec.Enums) == 0 && len(arrays) == 0 {
+		return nil, fmt.Errorf("<api-bin> declares no <struct>, <enum> or <array>")
+	}
+	for _, n := range arrays {
+		if err := spec.parseArray(n); err != nil {
+			return nil, err
+		}
 	}
 	// Layouts parse last, so a binding may follow the struct that uses it.
 	for _, n := range structs {
