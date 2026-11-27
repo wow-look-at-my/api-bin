@@ -81,15 +81,15 @@ const (
 
 // Item is one step of a layout: a stored field or a discarded read.
 type Item struct {
-	Kind  string
-	Name  string
-	Type  string
-	As    string
-	Label string
-	Go    string // statement of a call, with {label} and {out} holes
-	Cond  string // Go expression, "" when the item always applies
-	Items []Item
-	Bits  []Bit
+	Kind    string
+	Name    string
+	Type    string
+	As      string
+	Label   string
+	Go      string // statement of a call, with {label} and {out} holes
+	Cond    string // Go expression, "" when the item always applies
+	Items   []Item
+	Bits    []Bit
 	Cases   []Case
 	Unknown string // statement of a switch for a tag no case names
 }
@@ -261,7 +261,7 @@ func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
 	}
 	s := &Struct{
 		GoType: cmp.Or(n.Attr("go"), spec.Go.Model+n.Attr("name")),
-		Name: n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
+		Name:   n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
 		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
 		Pointer: n.Attr("pointer") == "true", Init: n.Attr("init"),
 	}

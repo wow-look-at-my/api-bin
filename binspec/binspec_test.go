@@ -73,12 +73,7 @@ func TestGenerateBareLabels(t *testing.T) {
 }
 
 func TestGenerateBranchShapes(t *testing.T) {
-	spec, err := Parse(wrap(`<struct name="Rec" go="rec" func="readRec" label="Rec">
-	<switch type="i32" label="Kind" unknown="fail({value}, {label})">
-		<case value="-1"/>
-		<case value="2"><when type="i32" label="Has"><field name="A" type="i32"/></when></case>
-	</switch>
-</struct>`))
+	spec, err := Parse(wrap(testGenerateBranchShapesXml))
 	require.NoError(t, err)
 	out, err := Generate(spec, "x.xml")
 	require.NoError(t, err)
@@ -191,3 +186,6 @@ var testGenerateShapesXml string
 
 //go:embed testdata/test-generate-rejects-unparsable-output.xml
 var testGenerateRejectsUnparsableOutputXml string
+
+//go:embed testdata/test-generate-branch-shapes.xml
+var testGenerateBranchShapesXml string

@@ -14,10 +14,12 @@
 	<type name="pintype" read="readEdGraphPinType(r, asset, v, {label})"/>
 	<type name="i32" read="r.ReadInt32({label})"/>
 	<type name="u32" read="r.ReadUint32({label})"/>
-	<type name="pintext" read="readPinFText(r, v, {label})"/>
+	<type name="i8" read="r.ReadInt8({label})"/>
+	<type name="pintext" read="readPinText(r, v, {label}).Source"/>
 	<type name="pinref" read="readPinRef(r, {label})"/>
 	<type name="pinrefs" read="readPinRefArray(r, {label})"/>
 
+	<flag name="culture-invariant-bool" test="v.hasCultureInvariantBool"/>
 	<flag name="filter-editor-only" test="v.filterEditorOnly"/>
 	<flag name="source-index" test="v.hasSourceIndex"/>
 	<flag name="pin-type" test="v.hasPinTypeAtAll"/>
@@ -111,6 +113,30 @@
 				<bit n="5" name="Orphaned"/>
 			</bits>
 		</group>
+	</struct>
+
+	<!--
+		FText as a pin field carries it (FText::SerializeText, Text.cpp:824-1040).
+		An editor-saved pin holds only the None (-1) and Base (0) histories. Any
+		other one fails the node through the per-export recovery. An FTextKey is
+		an FString on the wire.
+	-->
+	<struct name="pinText" go="pinText" func="readPinText" label-expr="label" params="r *Reader, v pinVersions, label string">
+		<skip type="u32" label="Flags"/>
+		<switch type="i8" label="HistoryType" unknown="panic(fmt.Sprintf(&quot;unsupported FText history type %d at 0x%X (%s)&quot;, {value}, r.Pos()-1, {label}))">
+			<case value="-1">
+				<group if="culture-invariant-bool">
+					<when type="bool32" label="bHasCultureInvariantString">
+						<field name="Source" type="fstring" label="CultureInvariantString"/>
+					</when>
+				</group>
+			</case>
+			<case value="0">
+				<skip type="fstring" label="Namespace"/>
+				<skip type="fstring" label="Key"/>
+				<field name="Source" type="fstring" label="SourceString"/>
+			</case>
+		</switch>
 	</struct>
 
 	<!-- One element of the trailing FUserPinInfo array. -->

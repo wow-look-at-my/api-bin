@@ -51,12 +51,12 @@ func callStmt(s *Struct, it Item) string {
 // argument names the spec file in the generated header.
 func Generate(spec *Spec, source string) ([]byte, error) {
 	tmpl, err := template.New("reader").Funcs(template.FuncMap{
-		"scope": func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
-		"read":  spec.readExpr,
-		"stmt":  callStmt,
-		"count": spec.countExpr,
-		"elem":  spec.elemExpr,
-		"check": checkStmt,
+		"scope":   func(s *Struct, items []Item) itemScope { return itemScope{Struct: s, Items: items} },
+		"read":    spec.readExpr,
+		"stmt":    callStmt,
+		"count":   spec.countExpr,
+		"elem":    spec.elemExpr,
+		"check":   checkStmt,
 		"unknown": unknownStmt,
 	}).Parse(readerTemplateText)
 	if err != nil {

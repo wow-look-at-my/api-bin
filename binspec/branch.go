@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	apidsl "github.com/wow-look-at-my/api-dsl"
+	"github.com/wow-look-at-my/go-containers/set"
 )
 
 // Case is one arm of a <switch>: the steps that run when the tag is Value.
@@ -19,7 +20,7 @@ type Case struct {
 // parseCases reads the <case> arms of a <switch>. An arm may be empty.
 func (spec *Spec) parseCases(n *apidsl.Node, owner string) ([]Case, error) {
 	var cases []Case
-	seen := map[int64]bool{}
+	seen := set.New[int64]()
 	for _, c := range n.Children() {
 		if c.Name() != "case" {
 			return nil, fmt.Errorf("%s: <switch>: unknown element <%s>", owner, c.Name())
@@ -31,10 +32,10 @@ func (spec *Spec) parseCases(n *apidsl.Node, owner string) ([]Case, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: <case> needs an integer value", owner)
 		}
-		if seen[value] {
+		if seen.Contains(value) {
 			return nil, fmt.Errorf("%s: <case> %d is declared twice", owner, value)
 		}
-		seen[value] = true
+		seen.Add(value)
 		arm := Case{Value: value}
 		if len(c.Children()) > 0 {
 			if arm.Items, err = spec.parseItems(c, owner); err != nil {
