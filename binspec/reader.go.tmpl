@@ -19,13 +19,26 @@ func {{ .Func }}(v {{ .GoType }}) string {
 {{ end }}
 {{- range .Spec.Structs }}
 // {{ .Func }} reads one {{ .Name }}.
-func {{ .Func }}({{ .Params }}) {{ $.Spec.Go.Model }}{{ .Name }} {
+func {{ .Func }}({{ .Params }}) {{ if .Pointer }}*{{ end }}{{ $.Spec.Go.Model }}{{ .Name }} {
+{{- if or .Pointer .Init }}
+	out := {{ if .Pointer }}&{{ end }}{{ $.Spec.Go.Model }}{{ .Name }}{ {{- .Init -}} }
+{{- else }}
 	var out {{ $.Spec.Go.Model }}{{ .Name }}
+{{- end }}
 {{ template "items" (scope . .Items) }}	return out
 }
 {{ end }}
 {{- define "items" }}{{ $s := .Struct }}{{ range .Items }}{{ if .Cond }}if {{ .Cond }} {
 {{ end }}{{ if eq .Kind "group" }}{{ template "items" (scope $s .Items) }}{{ else if eq .Kind "call" }}{{ stmt $s . }}
+{{ else if eq .Kind "null-if" }}if {{ read $s . }} {
+	return nil
+}
+{{ else if eq .Kind "bits" }}{
+	bits := {{ read $s . }}
+{{- range .Bits }}
+	out.{{ .Name }} = bits&(1<<{{ .N }}) != 0
+{{- end }}
+}
 {{ else if eq .Kind "skip" }}_ = {{ read $s . }}
 {{ else }}out.{{ .Name }} = {{ read $s . }}
 {{ end }}{{ if .Cond }}}

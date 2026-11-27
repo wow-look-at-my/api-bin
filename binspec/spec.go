@@ -59,15 +59,19 @@ type Struct struct {
 	Label     string
 	LabelExpr string
 	Params    string // "" means the <go> params
+	Pointer   bool   // the reader returns a pointer, and may return nil
+	Init      string // field list of the value's composite literal
 	Items     []Item
 }
 
 // Item kinds.
 const (
-	KindField = "field"
-	KindSkip  = "skip"
-	KindGroup = "group"
-	KindCall  = "call"
+	KindField  = "field"
+	KindSkip   = "skip"
+	KindGroup  = "group"
+	KindCall   = "call"
+	KindNullIf = "null-if"
+	KindBits   = "bits"
 )
 
 // Item is one step of a layout: a stored field or a discarded read.
@@ -80,6 +84,13 @@ type Item struct {
 	Go    string // statement of a call, with {label} and {out} holes
 	Cond  string // Go expression, "" when the item always applies
 	Items []Item
+	Bits  []Bit
+}
+
+// Bit is one flag of a <bits> step: bit N of the value sets member Name.
+type Bit struct {
+	N    int
+	Name string
 }
 
 // Parse reads a spec document.
@@ -231,12 +242,16 @@ func parseBinding(n *apidsl.Node, keyAttr string, into map[string]string) error 
 }
 
 func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
-	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params"); err != nil {
+	if err := apidsl.CheckAttrs(n, "name", "func", "label", "label-expr", "params", "pointer", "init"); err != nil {
 		return nil, err
 	}
 	s := &Struct{
 		Name: n.Attr("name"), Func: n.Attr("func"), Params: n.Attr("params"),
 		Label: n.Attr("label"), LabelExpr: n.Attr("label-expr"),
+		Pointer: n.Attr("pointer") == "true", Init: n.Attr("init"),
+	}
+	if p := n.Attr("pointer"); p != "" && p != "true" && p != "false" {
+		return nil, fmt.Errorf("<struct> %s: pointer is %q, want true or false", s.Name, p)
 	}
 	if s.Name == "" || s.Func == "" {
 		return nil, fmt.Errorf("<struct> needs name and func")
@@ -255,7 +270,42 @@ func (spec *Spec) parseStruct(n *apidsl.Node) (*Struct, error) {
 		return nil, err
 	}
 	s.Items = items
+	if !s.Pointer && hasKind(items, KindNullIf) {
+		return nil, fmt.Errorf("<struct> %s: <null-if> needs pointer=\"true\"", s.Name)
+	}
 	return s, nil
+}
+
+// hasKind reports whether items, or a group inside them, holds a step of kind.
+func hasKind(items []Item, kind string) bool {
+	for _, it := range items {
+		if it.Kind == kind || hasKind(it.Items, kind) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseBits reads the <bit> rows of a <bits> step.
+func parseBits(n *apidsl.Node, owner string) ([]Bit, error) {
+	var bits []Bit
+	for _, c := range n.Children() {
+		if c.Name() != "bit" {
+			return nil, fmt.Errorf("%s: <bits>: unknown element <%s>", owner, c.Name())
+		}
+		if err := apidsl.CheckAttrs(c, "n", "name"); err != nil {
+			return nil, fmt.Errorf("%s: %w", owner, err)
+		}
+		num, err := strconv.Atoi(c.Attr("n"))
+		if err != nil || num < 0 || num > 63 || c.Attr("name") == "" {
+			return nil, fmt.Errorf("%s: <bit> needs n from 0 to 63 and a name", owner)
+		}
+		bits = append(bits, Bit{N: num, Name: c.Attr("name")})
+	}
+	if len(bits) == 0 {
+		return nil, fmt.Errorf("%s: <bits> has no <bit>", owner)
+	}
+	return bits, nil
 }
 
 func (spec *Spec) parseItems(parent *apidsl.Node, owner string) ([]Item, error) {
@@ -279,7 +329,7 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 	switch it.Kind {
 	case KindField:
 		allowed = []string{"name", "type", "as", "label"}
-	case KindSkip:
+	case KindSkip, KindNullIf, KindBits:
 		allowed = []string{"type", "label"}
 	case KindGroup:
 	case KindCall:
@@ -320,7 +370,11 @@ func (spec *Spec) parseItem(n *apidsl.Node, owner string) (Item, error) {
 		it.Label = it.Name
 	}
 	if it.Label == "" {
-		return it, fmt.Errorf("%s: <skip> needs a label", owner)
+		return it, fmt.Errorf("%s: <%s> needs a label", owner, it.Kind)
+	}
+	if it.Kind == KindBits {
+		it.Bits, err = parseBits(n, owner)
+		return it, err
 	}
 	return it, nil
 }

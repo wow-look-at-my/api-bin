@@ -42,6 +42,8 @@ A spec opens with its bindings: the Go package to generate into, the wire types,
 - `<enum>` generates a value-to-name function from its `<value>` rows. Its `unknown` attribute formats a value the table lacks.
 - A `<struct>` takes `label` for a fixed label prefix, or `label-expr` for a Go expression such as a parameter. `params` overrides the parameter list of `<go>` for that reader.
 - `<call go="...">` puts a hand-written Go statement between the steps, for a part of a layout that the language cannot say. `{label}` is the struct's label prefix and `{out}` is the value under construction.
+- `pointer="true"` on a `<struct>` makes its reader return a pointer. A `<null-if>` step then reads a value and returns nil when it is true. `init` gives the starting members of the value.
+- `<bits>` reads one integer and sets a boolean member from each `<bit n="..." name="...">` row.
 
 The language has no built-in types. Each `<type>` names the Go expression that reads it, so a spec targets whatever reader its consumer already has.
 
