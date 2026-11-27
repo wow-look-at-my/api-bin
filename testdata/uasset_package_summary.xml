@@ -11,6 +11,8 @@
 	<type name="fstring" read="r.ReadFString({label})"/>
 	<type name="hash20" read="readHash20(r, {label})"/>
 	<type name="engver" read="readEngineVersion(r, {label})"/>
+	<type name="customversion" read="readCustomVersion(r, {label})"/>
+	<type name="guid-customversion" read="readGuidCustomVersion(r, {label})"/>
 
 	<!-- The version tests read the summary under construction. -->
 	<version stream="ue4" test="out.UE4Ver(uasset.VER_UE4_{name})"/>
@@ -20,6 +22,24 @@
 	<flag name="ue5-version" test="out.LegacyFileVersion &lt;= uasset.LegacyVersionHasUE5Version"/>
 	<flag name="custom-versions" test="out.LegacyFileVersion &lt;= uasset.LegacyVersionCustomEnums"/>
 	<flag name="texture-allocations" test="out.LegacyFileVersion &gt; uasset.LegacyVersionNoTextureAlloc"/>
+
+	<!-- FCustomVersion: a GUID key and a version. -->
+	<struct name="CustomVersion" func="readCustomVersion" label-expr="label" params="r *Reader, label string">
+		<field name="Key" type="guid"/>
+		<field name="Version" type="i32"/>
+	</struct>
+
+	<!-- FGuidCustomVersion_DEPRECATED: the same, then a friendly name. -->
+	<struct name="CustomVersion" func="readGuidCustomVersion" label-expr="label" params="r *Reader, label string">
+		<field name="Key" type="guid"/>
+		<field name="Version" type="i32"/>
+		<skip type="fstring" label="FriendlyName"/>
+	</struct>
+
+	<array of="CustomVersion" func="readCustomVersionArray" label="CustomVersion" count="i32" count-label="CustomVersionCount"
+		elem="customversion" alloc="true" check="if !customVersionCountOK(r, {count}, &quot;custom&quot;) { return nil }"/>
+	<array of="CustomVersion" func="readGuidCustomVersionArray" label="CustomVersion" count="i32" count-label="CustomVersionCount"
+		elem="guid-customversion" alloc="true" check="if !customVersionCountOK(r, {count}, &quot;guid custom&quot;) { return nil }"/>
 
 	<!-- FPackageFileSummary, in the serialization order of PackageFileSummary.cpp. -->
 	<struct name="PackageSummary" func="parseHeader" label="">

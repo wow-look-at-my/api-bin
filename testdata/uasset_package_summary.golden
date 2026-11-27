@@ -2,7 +2,27 @@
 
 package main
 
-import "github.com/wow-look-at-my/uasset/uasset"
+import (
+	"fmt"
+	"github.com/wow-look-at-my/uasset/uasset"
+)
+
+// readCustomVersion reads one CustomVersion.
+func readCustomVersion(r *Reader, label string) uasset.CustomVersion {
+	var out uasset.CustomVersion
+	out.Key = r.ReadGuid(label + ".Key")
+	out.Version = r.ReadInt32(label + ".Version")
+	return out
+}
+
+// readGuidCustomVersion reads one CustomVersion.
+func readGuidCustomVersion(r *Reader, label string) uasset.CustomVersion {
+	var out uasset.CustomVersion
+	out.Key = r.ReadGuid(label + ".Key")
+	out.Version = r.ReadInt32(label + ".Version")
+	_ = r.ReadFString(label + ".FriendlyName")
+	return out
+}
 
 // parseHeader reads one PackageSummary.
 func parseHeader(r *Reader) uasset.PackageSummary {
@@ -137,6 +157,32 @@ func parseHeader(r *Reader) uasset.PackageSummary {
 	}
 	if !out.UE5Ver(uasset.UE5_DATA_RESOURCES) {
 		out.DataResourceOffset = -1
+	}
+	return out
+}
+
+// readCustomVersionArray reads a counted array of CustomVersion.
+func readCustomVersionArray(r *Reader) []uasset.CustomVersion {
+	count := r.ReadInt32("CustomVersionCount")
+	if !customVersionCountOK(r, count, "custom") {
+		return nil
+	}
+	out := make([]uasset.CustomVersion, 0, count)
+	for i := range count {
+		out = append(out, readCustomVersion(r, fmt.Sprintf("CustomVersion[%d]", i)))
+	}
+	return out
+}
+
+// readGuidCustomVersionArray reads a counted array of CustomVersion.
+func readGuidCustomVersionArray(r *Reader) []uasset.CustomVersion {
+	count := r.ReadInt32("CustomVersionCount")
+	if !customVersionCountOK(r, count, "guid custom") {
+		return nil
+	}
+	out := make([]uasset.CustomVersion, 0, count)
+	for i := range count {
+		out = append(out, readGuidCustomVersion(r, fmt.Sprintf("CustomVersion[%d]", i)))
 	}
 	return out
 }
